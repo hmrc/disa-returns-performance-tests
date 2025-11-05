@@ -31,4 +31,17 @@ object RandomDataGenerator {
     val number = Random.nextInt(999999) + 1
     f"STD$number%06d"
   }
+  def generateRandomISAReference(): String =
+    f"Z${scala.util.Random.nextInt(10000)}%04d"
+
+  def getMonth: String = {
+    val months = Seq("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+    months(scala.util.Random.nextInt(months.length))
+  }
+
+  def getTaxYear: String = {
+    val currentYear       = java.time.Year.now.getValue
+    val nextYearTwoDigits = (currentYear + 1) % 100
+    f"$currentYear-$nextYearTwoDigits%02d"
+  }
 }

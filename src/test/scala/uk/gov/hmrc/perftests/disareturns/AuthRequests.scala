@@ -16,9 +16,7 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
-import io.gatling.core.Predef._
-import io.gatling.http.Predef._
-import io.gatling.http.request.builder.HttpRequestBuilder
+import scalaj.http.Http
 import uk.gov.hmrc.performance.conf.ServicesConfiguration
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.ggSignInUrl
 
@@ -45,12 +43,24 @@ object AuthRequests extends ServicesConfiguration {
                                      |  ]
                                      |}""".stripMargin
 
-  def getSubmissionBearerToken: HttpRequestBuilder =
-    http("Retrieve bearer token")
-      .post(ggSignInUrl)
-      .body(StringBody(authRequestPayload))
-      .asJson
-      .check(status.is(201))
-      .check(header("authorization").transform(_.replaceAll(".*,(Bearer\\s+\\S+)", "$1")).saveAs("bearerToken"))
-      .silent
+  def getSubmissionBearerToken: String = {
+    val url         = ggSignInUrl
+    val response    = Http(url)
+      .postData(authRequestPayload)
+      .header("Content-Type", "application/json")
+      .header("Accept", "application/json")
+      .asString
+    if (response.code != 201) {
+      throw new RuntimeException(
+        s"Failed to retrieve the bearer token. Status: ${response.code}, Body: ${response.body}"
+      )
+    }
+    val bearerToken = response.header("authorization") match {
+      case Some(h) =>
+        h.replaceAll(".*(Bearer\\s+\\S+).*", "$1")
+      case None    =>
+        throw new RuntimeException("Authorization header not found")
+    }
+    bearerToken
+  }
 }

@@ -16,10 +16,8 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
-import io.gatling.core.Predef._
-import io.gatling.http.Predef._
-import io.gatling.http.request.builder.HttpRequestBuilder
 import play.api.libs.json.{JsObject, Json}
+import scalaj.http.Http
 import uk.gov.hmrc.performance.conf.ServicesConfiguration
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
@@ -27,11 +25,16 @@ import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
 object ReportingWindowRequests extends ServicesConfiguration {
   val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
 
-  val setReportingWindowsOpen: HttpRequestBuilder =
-    http("Set reporting window as Open")
-      .post(s"$disaReturnsStubHost$reportingWindowPath")
+  def setReportingWindowsOpen(): Unit = {
+    val url      = s"$disaReturnsStubHost$reportingWindowPath"
+    val response = Http(url)
+      .postData(reportingWindowPayload.toString())
       .headers(reportingWindowHeaders)
-      .body(StringBody(reportingWindowPayload.toString()))
-      .check(status.is(204))
-      .silent
+      .asString
+    if (response.code != 204) {
+      throw new RuntimeException(
+        s"Failed to set reporting window open. Status: ${response.code}, Body: ${response.body}"
+      )
+    }
+  }
 }
