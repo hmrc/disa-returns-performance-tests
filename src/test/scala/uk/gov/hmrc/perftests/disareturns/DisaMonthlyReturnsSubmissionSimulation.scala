@@ -46,12 +46,12 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
       Map("isaManagerReference" -> generateRandomISAReference(), "taxYear" -> getTaxYear, "month" -> getMonth)
     )
 
-  val reportingResultsSummaryInformation1: Iterator[Map[String, String]] =
+  val reconciliationReportJourneyOneInformation: Iterator[Map[String, String]] =
     Iterator.continually(
       Map("isaManagerReference" -> generateRandomISAReference(), "taxYear" -> getTaxYear, "month" -> getMonth)
     )
 
-  val reportingResultsSummaryInformation2: Iterator[Map[String, String]] =
+  val reconciliationReportJourneyTwoInformation: Iterator[Map[String, String]] =
     Iterator.continually(
       Map("isaManagerReference" -> generateRandomISAReference(), "taxYear" -> getTaxYear, "month" -> getMonth)
     )
@@ -62,9 +62,9 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
 
   val isaReportInformationFeeder: ChainBuilder = feed(isaMonthlyReportInformation)
 
-  val reportingResultsSummaryFeeder1: ChainBuilder = feed(reportingResultsSummaryInformation1)
+  val reconciliationReportJourneyOneFeeder: ChainBuilder = feed(reconciliationReportJourneyOneInformation)
 
-  val reportingResultsSummaryFeeder2: ChainBuilder = feed(reportingResultsSummaryInformation2)
+  val reconciliationReportJourneyTwoFeeder: ChainBuilder = feed(reconciliationReportJourneyTwoInformation)
 
   setup(
     "Disa-Monthly-returns-Submission",
@@ -76,16 +76,16 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
 
   setup(
     "Reconciliation-Report-Journey-1",
-    "Reconciliation Report Journey through call back api"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ reportingResultsSummaryFeeder1.actionBuilders: _*) withRequests (
+    "Reconciliation Report Journey through the call back api"
+  ) withActions (bearerTokenFeeder.actionBuilders ++ reconciliationReportJourneyOneFeeder.actionBuilders: _*) withRequests (
     makeReturnSummaryCallback,
     getReportingResultsSummary
   )
 
   setup(
     "Reconciliation-Report-Journey-2",
-    "Reconciliation Report Journey through test support api"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ reportingResultsSummaryFeeder2.actionBuilders: _*) withRequests (
+    "Reconciliation Report Journey through the test support api"
+  ) withActions (bearerTokenFeeder.actionBuilders ++ reconciliationReportJourneyTwoFeeder.actionBuilders: _*) withRequests (
     triggerReportReadyScenario,
     getReportingResultsSummary
   )
