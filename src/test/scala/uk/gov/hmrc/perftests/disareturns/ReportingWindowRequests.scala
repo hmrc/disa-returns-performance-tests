@@ -17,23 +17,28 @@
 package uk.gov.hmrc.perftests.disareturns
 
 import play.api.libs.json.{JsObject, Json}
-import scalaj.http.Http
+import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
+import play.api.libs.ws.StandaloneWSClient
 import uk.gov.hmrc.performance.conf.ServicesConfiguration
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
 
+import scala.concurrent.Await
+import scala.concurrent.duration.DurationInt
+
 object ReportingWindowRequests extends ServicesConfiguration {
   val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
 
-  def setReportingWindowsOpen(): Unit = {
-    val url      = s"$disaReturnsStubHost$reportingWindowPath"
-    val response = Http(url)
-      .postData(reportingWindowPayload.toString())
-      .headers(reportingWindowHeaders)
-      .asString
-    if (response.code != 204) {
+  def setReportingWindowsOpen(wsClient: StandaloneWSClient): Unit = {
+    val url            = s"$disaReturnsStubHost$reportingWindowPath"
+    val futureResponse = wsClient
+      .url(url)
+      .addHttpHeaders(reportingWindowHeaders.toSeq: _*)
+      .post(reportingWindowPayload.toString())
+    val response       = Await.result(futureResponse, 10.seconds)
+    if (response.status != 204) {
       throw new RuntimeException(
-        s"Failed to set reporting window open. Status: ${response.code}, Body: ${response.body}"
+        s"Failed to set reporting window open. Status: ${response.status}, Body: ${response.body}"
       )
     }
   }

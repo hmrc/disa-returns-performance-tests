@@ -15,10 +15,14 @@
  */
 
 package uk.gov.hmrc.perftests.disareturns
-
-import scalaj.http.Http
+import play.api.libs.json.Json
+import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
+import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
-import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerWithBearerTokenAndContentTypeJson, subscriptionFieldsHeadersMap}
+import uk.gov.hmrc.perftests.disareturns.constant.Headers.{notificationBoxHadersMap, subscriptionFieldsHeadersMap}
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 object ThirdPartyApplicationRequests {
   var cookies: String                   = _
@@ -40,7 +44,7 @@ object ThirdPartyApplicationRequests {
                                                  |}""".stripMargin
   val notificationBoxPayload: String    = """{
                                                  |  "boxName": "obligations/declaration/isa/return##1.0##callbackUrl",
-                                                 |  "clientId": "1CLIENT_ID"
+                                                 |  "clientId": "CLIENT_ID"
                                                  |}""".stripMargin
   val subscriptionFieldsPayload: String = """{
                                                  |  "fieldDefinitions": [
@@ -62,67 +66,75 @@ object ThirdPartyApplicationRequests {
                                                  |  ]
                                                  |}""".stripMargin
 
-  val notificationBoxHeadersMap: Map[String, String] =
-    Map("Content-Type" -> "application/json", "User-Agent" -> "disa-returns")
-
-  def createClientApplication(): String = {
-    val url      = s"$third_party_application_host$thirdPartyApplicationPath"
-    val response = Http(url)
-      .postData(clientApplicationPayload)
-      .headers(headerWithBearerTokenAndContentTypeJson)
-      .asString
-    if (response.code != 201) {
-      throw new RuntimeException(
-        s"Failed to create client application. Status: ${response.code}, Body: ${response.body}"
+  def createClientApplication(wsClient: StandaloneAhcWSClient, token: String): Future[ClientApplication] = {
+    val url = s"$third_party_application_host$thirdPartyApplicationPath"
+    wsClient
+      .url(url)
+      .addHttpHeaders(
+        "Authorization" -> token,
+        "Content-Type"  -> "application/json"
       )
-    }
-    cookies = response.headers.get("Cookie") match {
-      case Some(list) =>
-        list.flatMap(_.split(";").headOption.map(_.trim)).mkString("; ")
-      case None       => ""
-    }
-    println("-----test2--------")
-    println(response.headers)
-    val json     = ujson.read(response.body)
-    val clientId = json("details")("token")("clientId").str
-    clientId
+      .post(clientApplicationPayload)
+      .map { response =>
+        if (response.status != 201) {
+          throw new RuntimeException(
+            s"Failed to create client application. Status: ${response.status}, Body: ${response.body}"
+          )
+        }
+        val json          = Json.parse(response.body)
+        val clientId      = (json \ "details" \ "token" \ "clientId").as[String]
+        val applicationId = (json \ "details" \ "id").as[String]
+        ClientApplication(clientId, applicationId)
+      }
   }
 
-  def createNotificationBox(clientId: String): Unit = {
-    println("-----test--------")
-    println(cookies)
-    val url         = s"$ppns_host$ppnsPath"
-    val requestBody = notificationBoxPayload.replace("CLIENT_ID", clientId)
-    val response    = Http(url)
+  def createNotificationBox(wsClient: StandaloneAhcWSClient, clientID: String): Future[Unit] = {
+    val url = s"$ppns_host$ppnsPath"
+    val requestBody = notificationBoxPayload.replace("CLIENT_ID", clientID)
+    wsClient
+      .url(url)
+      .withHttpHeaders(
+        notificationBoxHadersMap.toSeq: _*
+      )
       .put(requestBody)
-      .headers(notificationBoxHeadersMap)
-      .header("Cookie", cookies)
-      .asString
-
-    println("-------------")
-    println(requestBody)
-    println("-------------")
-    println(notificationBoxHeadersMap)
-    println("-------------")
-    println(cookies)
-    if (response.code != 200) {
-      throw new RuntimeException(
-        s"Failed2 to create notification box. Status: ${response.code}, Body: ${response.body}"
-      )
-    }
+      .map { response =>
+        if (response.status != 201) {
+          throw new RuntimeException(
+            s"Failed2 to create notification box. Status: ${response.status}, Body: ${response.body}"
+          )
+        }
+      }
   }
 
-  def createSubscriptionFields(): Unit = {
-    val url      = s"$api_subscription_fields_host$subscriptionPath"
-    val response = Http(url)
-      .postData(subscriptionFieldsPayload)
-      .headers(subscriptionFieldsHeadersMap)
-      .asString
+  def createSubscriptionFields(wsClient: StandaloneAhcWSClient): Future[Unit] = {
+    val url = s"$api_subscription_fields_host$subscriptionPath"
+    wsClient
+      .url(url)
+      .addHttpHeaders(subscriptionFieldsHeadersMap.toSeq: _*)
+      .put(subscriptionFieldsPayload)
+      .map { response =>
+        if (response.status != 201 && response.status != 200) {
+          throw new RuntimeException(
+            s"Failed to create the subscription fields. Status: ${response.status}, Body: ${response.body}"
+          )
+        }
+      }
+  }
 
-    if (response.code != 200) {
-      throw new RuntimeException(
-        s"Failed to create the subscription fields. Status: ${response.code}, Body: ${response.body}"
+  def deleteClientApplication(wsClient: StandaloneAhcWSClient, token: String, clientID: String): Future[Unit] = {
+    val url = s"$third_party_application_host$thirdPartyApplicationPath/$clientID/delete"
+    wsClient
+      .url(url)
+      .addHttpHeaders(
+        "Authorization" -> token
       )
-    }
+      .post("")
+      .map { response =>
+        if (response.status != 204) {
+          throw new RuntimeException(
+            s"Failed to delete the client application. Status: ${response.status}, Body: ${response.body}"
+          )
+        }
+      }
   }
 }

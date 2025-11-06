@@ -16,9 +16,13 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
-import scalaj.http.Http
+import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
+import play.api.libs.ws.StandaloneWSClient
 import uk.gov.hmrc.performance.conf.ServicesConfiguration
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.ggSignInUrl
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
 
 object AuthRequests extends ServicesConfiguration {
 
@@ -43,24 +47,30 @@ object AuthRequests extends ServicesConfiguration {
                                      |  ]
                                      |}""".stripMargin
 
-  def getSubmissionBearerToken: String = {
-    val url         = ggSignInUrl
-    val response    = Http(url)
-      .postData(authRequestPayload)
-      .header("Content-Type", "application/json")
-      .header("Accept", "application/json")
-      .asString
-    if (response.code != 201) {
-      throw new RuntimeException(
-        s"Failed to retrieve the bearer token. Status: ${response.code}, Body: ${response.body}"
+  def getSubmissionBearerToken(ws: StandaloneWSClient): String = {
+    val url = ggSignInUrl
+
+    val futureResponse = ws
+      .url(url)
+      .addHttpHeaders(
+        "Content-Type" -> "application/json",
+        "Accept"       -> "application/json"
       )
-    }
-    val bearerToken = response.header("authorization") match {
-      case Some(h) =>
-        h.replaceAll(".*(Bearer\\s+\\S+).*", "$1")
-      case None    =>
-        throw new RuntimeException("Authorization header not found")
-    }
-    bearerToken
+      .post(authRequestPayload)
+      .map { response =>
+        if (response.status != 201) {
+          throw new RuntimeException(
+            s"Failed to retrieve the bearer token. Status: ${response.status}, Body: ${response.body}"
+          )
+        }
+        response.header("Authorization") match {
+          case Some(h) =>
+            val extractedToken = h.replaceAll(".*(Bearer\\s+\\S+).*", "$1")
+            extractedToken
+          case None =>
+            throw new RuntimeException("Authorization header not found")
+        }
+      }
+    Await.result(futureResponse, 10.seconds)
   }
 }
