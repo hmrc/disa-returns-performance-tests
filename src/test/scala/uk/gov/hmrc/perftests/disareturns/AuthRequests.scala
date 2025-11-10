@@ -48,10 +48,10 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
                                      |  ]
                                      |}""".stripMargin
 
-  def getSubmissionBearerToken: Either[String, String] = {
+  def getSubmissionBearerToken: String = {
     val url = ggSignInUrl
 
-    val futureResponse = ws
+    val futureEither = ws
       .url(url)
       .addHttpHeaders(
         "Content-Type" -> "application/json",
@@ -61,16 +61,21 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
       .map { response =>
         if (response.status != 201)
           Left(s"Failed to retrieve bearer token. Status: ${response.status}, Body: ${response.body}")
-        else
-          response.header("Authorization") match {
-            case Some(h) =>
-              val token = h.replaceAll(".*(Bearer\\s+\\S+).*", "$1")
-              Right(token)
-            case None    =>
-              Left("Authorization header not found")
-          }
+        else {
+          response
+            .header("Authorization")
+            .map { h =>
+              h.replaceAll(".*(Bearer\\s+\\S+).*", "$1")
+            }
+            .toRight("Authorization header not found")
+        }
       }
 
-    Await.result(futureResponse, 10.seconds)
+    Await.result(futureEither, 10.seconds) match {
+      case Right(token) => token
+      case Left(error)  =>
+        throw new RuntimeException(error)
+    }
   }
+
 }

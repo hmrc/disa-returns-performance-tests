@@ -26,19 +26,22 @@ import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRando
 
 class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
+  var setupData: TestDataSetupResult = _
+
   before {
-    testDataSetup()
+    setupData = testDataSetup()
   }
+
   after {
-    testDataCleanUp()
+    testDataCleanUp(setupData)
   }
 
   val bearerTokenInformation: Iterator[Map[String, Any]] = Iterator.continually(
-    Map("bearerToken" -> bearerToken)
+    Map("bearerToken" -> setupData.bearerToken)
   )
 
   val clientIdInformation: Iterator[Map[String, String]] = Iterator.continually(
-    Map("clientId" -> clientIds(scala.util.Random.nextInt(clientIds.size)))
+    Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size)))
   )
 
   val isaMonthlyReportInformation: Iterator[Map[String, String]] =
