@@ -22,10 +22,11 @@ import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import javax.inject.Singleton
+import scala.concurrent.{ExecutionContext, Future}
 
-class ReportingWindowRequests(ws: StandaloneAhcWSClient) {
+@Singleton
+class ReportingWindowRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
   val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
 
   def setReportingWindowsOpen(): Future[Unit] = {

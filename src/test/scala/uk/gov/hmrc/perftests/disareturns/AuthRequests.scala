@@ -20,11 +20,12 @@ import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.ggSignInUrl
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext.Implicits.global
+import javax.inject.Singleton
 import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, ExecutionContext}
 
-class AuthRequests(ws: StandaloneAhcWSClient) {
+@Singleton
+class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
 
   val authRequestPayload: String = """{
                                      |  "internalId": "Int-a7688cda-d983-472d-9971-ddca5f124641",

@@ -21,10 +21,11 @@ import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.{notificationBoxHadersMap, subscriptionFieldsHeadersMap}
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import javax.inject.Singleton
+import scala.concurrent.{ExecutionContext, Future}
 
-class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient) {
+@Singleton
+class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
 
   val clientApplicationPayload: String  = """{
                                                  |  "name": "TEST APP",
