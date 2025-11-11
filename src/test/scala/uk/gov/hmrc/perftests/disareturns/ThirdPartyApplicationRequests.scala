@@ -82,9 +82,19 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
             s"Failed to create client application. Status: ${response.status}, Body: ${response.body}"
           )
         }
-        val json          = Json.parse(response.body)
-        val clientId      = (json \ "details" \ "token" \ "clientId").as[String]
-        val applicationId = (json \ "details" \ "id").as[String]
+        val json     = Json.parse(response.body)
+        val clientId = (json \ "details" \ "token" \ "clientId")
+          .asOpt[String]
+          .getOrElse(throw new RuntimeException("JSON validation failed: 'clientId' is missing"))
+        if (clientId.isEmpty)
+          throw new RuntimeException("JSON validation failed: 'clientId' is empty")
+
+        val applicationId = (json \ "details" \ "id")
+          .asOpt[String]
+          .getOrElse(throw new RuntimeException("JSON validation failed: 'applicationId' is missing"))
+        if (applicationId.isEmpty)
+          throw new RuntimeException("JSON validation failed: 'applicationId' is empty")
+
         ClientApplication(clientId, applicationId)
       }
   }
@@ -99,8 +109,10 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
       )
       .put(requestBody)
       .map { response =>
-        if (response.status != 201) Right(())
-        else Left(s"Failed to create notification box. status ${response.status}, body: ${response.body}")
+        if (response.status != 201)
+          throw new RuntimeException(
+            s"Failed to create notification box. status ${response.status}, body: ${response.body}"
+          )
       }
   }
 
@@ -111,8 +123,10 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
       .addHttpHeaders(subscriptionFieldsHeadersMap.toSeq: _*)
       .put(subscriptionFieldsPayload)
       .map { response =>
-        if (response.status != 201 && response.status != 200) Right(())
-        else Left(s"Failed to create the subscription fields. status ${response.status}, body: ${response.body}")
+        if (response.status != 200 && response.status != 201)
+          throw new RuntimeException(
+            s"Failed to create the subscription fields. status ${response.status}, body: ${response.body}"
+          )
       }
   }
 
@@ -120,13 +134,13 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
     val url = s"$third_party_application_host$thirdPartyApplicationPath/$clientID/delete"
     ws
       .url(url)
-      .addHttpHeaders(
-        "Authorization" -> token
-      )
+      .addHttpHeaders("Authorization" -> token)
       .post("")
       .map { response =>
-        if (response.status != 204) Right(())
-        else Left(s"Failed to delete the thrird party application. Status ${response.status}, body: ${response.body}")
+        if (response.status != 204)
+          throw new RuntimeException(
+            s"Failed to delete the third-party application. Status ${response.status}, body: ${response.body}"
+          )
       }
   }
 }

@@ -18,14 +18,12 @@ package uk.gov.hmrc.perftests.disareturns
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import org.scalatest.Assertions.cancel
-import org.slf4j.LoggerFactory
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 trait BaseRequests {
-  private val logger                = LoggerFactory.getLogger("SetupLogger")
   implicit val system: ActorSystem  = ActorSystem("setup-system")
   implicit val mat: Materializer    = Materializer(system)
   implicit val ec: ExecutionContext = system.dispatcher
@@ -38,7 +36,6 @@ trait BaseRequests {
   def testDataSetup(): TestDataSetupResult                  =
     try {
       val extractedToken = authRequests.getSubmissionBearerToken
-
       reportingWindowRequests.setReportingWindowsOpen()
 
       val appData = (1 to noOfThirdPartyApplications).map { _ =>

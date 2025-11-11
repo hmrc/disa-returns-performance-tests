@@ -23,21 +23,26 @@ import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
 
 import javax.inject.Singleton
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, ExecutionContext}
 
 @Singleton
 class ReportingWindowRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
   val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
 
-  def setReportingWindowsOpen(): Future[Unit] = {
+  def setReportingWindowsOpen(): Unit = {
     val url = s"$disaReturnsStubHost$reportingWindowPath"
-    ws
+
+    val response = ws
       .url(url)
       .addHttpHeaders(reportingWindowHeaders.toSeq: _*)
       .post(reportingWindowPayload.toString())
-      .map { response =>
-        if (response.status != 204) Right(())
-        else Left(s"Failed to set the reporting window open. Status ${response.status}, body: ${response.body}")
-      }
+      .map(identity)
+    val result   = Await.result(response, 10.seconds)
+    if (result.status != 204) {
+      throw new RuntimeException(
+        s"Failed to set the reporting window open. Status ${result.status}, body: ${result.body}"
+      )
+    }
   }
 }
