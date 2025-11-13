@@ -21,7 +21,7 @@ import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.DisaMonthlyReturnsSubmissionRequests.submitMonthlyReport
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
-import uk.gov.hmrc.perftests.disareturns.ReconciliationReportService.{generateReconciliationReportScenario, getReportingResultsSummary, makeReturnSummaryCallback}
+import uk.gov.hmrc.perftests.disareturns.ReconciliationReportService.{generateReconciliationReportScenario, getReconciliationResultsSummary, submitReturnSummaryCallback}
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
 
 class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
@@ -53,18 +53,18 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
     )
   }
   setup(
-    "Disa-Monthly-returns-Submission",
-    "Disa Monthly returns submission"
+    "DISA-Monthly-Returns-Submission-Journey",
+    "DISA monthly returns submission"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
     submitMonthlyReport,
     submitDeclaration
   )
   setup(
-    "Reconciliation-Report-Journey-1",
-    "Reconciliation Report Journey through the call back api"
+    "Reconciliation-Report-Summary-Journey",
+    "Reconciliation report summary journey"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders: _*) withRequests (
-    makeReturnSummaryCallback,
-    getReportingResultsSummary
+    submitReturnSummaryCallback,
+    getReconciliationResultsSummary
   )
 
   //This can probably be removed if we are having our own repo for test-support-api
@@ -73,7 +73,7 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
     "Reconciliation Report Journey through the test support api"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders: _*) withRequests (
     generateReconciliationReportScenario,
-    getReportingResultsSummary
+    getReconciliationResultsSummary
   )
 
   runSimulation()

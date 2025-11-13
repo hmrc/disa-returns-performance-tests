@@ -30,8 +30,8 @@ object ReconciliationReportService {
                    |}
                    |""".stripMargin
 
-  val makeReturnSummaryCallback: HttpRequestBuilder =
-    http("Make return summary callback")
+  val submitReturnSummaryCallback: HttpRequestBuilder =
+    http("Submit Return summary callback")
       .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}/2025-26/#{month}")
       .headers(headerWithBearerTokenAndContentTypeJson)
       .body(StringBody(NpsCallbackPayload))
@@ -45,7 +45,7 @@ object ReconciliationReportService {
                    |}""".stripMargin
 
   val generateReconciliationReportScenario: HttpRequestBuilder =
-    http("Trigger report ready scenario")
+    http("Generate Reconciliation Report")
       .post(s"$disaReturnsTestSupportBaseUrl/#{isaManagerReference}/2025-26/#{month}/$testSupportPath")
       .headers(headerWithBearerTokenAndContentTypeJson)
       .body(StringBody(generateReconciliationReportPayload))
