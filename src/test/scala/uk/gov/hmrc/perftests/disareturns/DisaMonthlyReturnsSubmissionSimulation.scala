@@ -21,7 +21,7 @@ import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.DisaMonthlyReturnsSubmissionRequests.submitMonthlyReport
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
-import uk.gov.hmrc.perftests.disareturns.ReconciliationReportService.{getReportingResultsSummary, makeReturnSummaryCallback, triggerReportReadyScenario}
+import uk.gov.hmrc.perftests.disareturns.ReconciliationReportService.{generateReconciliationReportScenario, getReportingResultsSummary, makeReturnSummaryCallback}
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
 
 class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
@@ -30,6 +30,7 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
 
   before {
     setupData = testDataSetup()
+    println(Console.GREEN + "6" + Console.RESET)
   }
 
   after {
@@ -44,20 +45,20 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
     Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size)))
   )
 
-  val isaMonthlyReportInformation: Iterator[Map[String, String]] =
-    Iterator.continually(
-      Map("isaManagerReference" -> generateRandomISAReference(), "taxYear" -> getTaxYear, "month" -> getMonth)
-    )
 
-  val reconciliationReportJourneyOneInformation: Iterator[Map[String, String]] =
+  def generateReportInformation(): Iterator[Map[String, String]] = {
     Iterator.continually(
-      Map("isaManagerReference" -> generateRandomISAReference(), "taxYear" -> getTaxYear, "month" -> getMonth)
+      Map(
+        "isaManagerReference" -> generateRandomISAReference(),
+        "taxYear" -> getTaxYear,
+        "month" -> getMonth
+      )
     )
+  }
 
-  val reconciliationReportJourneyTwoInformation: Iterator[Map[String, String]] =
-    Iterator.continually(
-      Map("isaManagerReference" -> generateRandomISAReference(), "taxYear" -> getTaxYear, "month" -> getMonth)
-    )
+  val isaMonthlyReportInformation: Iterator[Map[String, String]] = generateReportInformation()
+  val reconciliationReportJourneyOneInformation: Iterator[Map[String, String]] = generateReportInformation()
+  val reconciliationReportJourneyTwoInformation: Iterator[Map[String, String]] = generateReportInformation()
 
   val bearerTokenFeeder: ChainBuilder = feed(bearerTokenInformation)
 
@@ -89,7 +90,7 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
     "Reconciliation-Report-Journey-2",
     "Reconciliation Report Journey through the test support api"
   ) withActions (bearerTokenFeeder.actionBuilders ++ reconciliationReportJourneyTwoFeeder.actionBuilders: _*) withRequests (
-    triggerReportReadyScenario,
+    generateReconciliationReportScenario,
     getReportingResultsSummary
   )
 

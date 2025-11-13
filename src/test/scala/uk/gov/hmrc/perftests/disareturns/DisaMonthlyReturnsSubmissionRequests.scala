@@ -28,9 +28,6 @@ object DisaMonthlyReturnsSubmissionRequests {
     http("Submit monthly report")
       .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}")
       .headers(headerWithClientIdAndBearerToken)
-      .body(StringBody { session =>
-        val payload = validNdjsonTestData()
-        payload
-      })
+      .body(StringBody(validNdjsonTestData()))
       .check(status.is(204))
 }

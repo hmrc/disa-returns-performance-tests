@@ -19,13 +19,13 @@ package uk.gov.hmrc.perftests.disareturns
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.ggSignInUrl
+import uk.gov.hmrc.perftests.disareturns.models.SetupAssertions
 
 import javax.inject.Singleton
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
+class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
 
   val authRequestPayload: String = """{
                                      |  "internalId": "Int-a7688cda-d983-472d-9971-ddca5f124641",
@@ -48,41 +48,32 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
                                      |  ]
                                      |}""".stripMargin
 
-  def getSubmissionBearerToken: String = {
-    val url         = ggSignInUrl
+  def getSubmissionBearerToken: Future[String] = {
+    val url = ggSignInUrl
     val bearerRegex = "Bearer\\s+\\S+".r
 
-    val bearerToken = ws
-      .url(url)
+    ws.url(url)
       .addHttpHeaders(
         "Content-Type" -> "application/json",
-        "Accept"       -> "application/json"
+        "Accept" -> "application/json"
       )
       .post(authRequestPayload)
       .map { response =>
-        if (response.status != 201)
-          throw new RuntimeException(
-            s"Failed to retrieve bearer token. Status: ${response.status}, Body: ${response.body}"
-          )
-
-        val authHeader = response
-          .header("Authorization")
-          .getOrElse(
-            throw new RuntimeException(
-              s"Authorization header missing in token response. Body: ${response.body}"
-            )
-          )
-
-        bearerRegex.findFirstMatchIn(authHeader) match {
-          case Some(matched) => matched.matched
-          case None          =>
-            throw new RuntimeException(
-              s"Bearer token not found in Authorization header: $authHeader"
-            )
-        }
+        ensureSetup(
+          response.status == 201,
+          s"Failed to retrieve bearer token. Status=${response.status}, Body=${response.body}"
+        )
+        val authHeader = response.header("Authorization")
+        ensureSetup(
+          authHeader.isDefined,
+          s"Authorization header missing in token response. Body=${response.body}"
+        )
+        val token = bearerRegex.findFirstMatchIn(authHeader.get)
+        ensureSetup(
+          token.isDefined,
+          s"Bearer token not found in Authorization header: ${authHeader.get}"
+        )
+        token.get.matched
       }
-
-    Await.result(bearerToken, 10.seconds)
   }
-
 }

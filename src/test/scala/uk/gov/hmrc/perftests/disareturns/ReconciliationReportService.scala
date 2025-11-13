@@ -23,33 +23,32 @@ import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerOnlyWithBearerToken, headerWithBearerTokenAndContentTypeJson}
 
 object ReconciliationReportService {
+
+  val NpsCallbackPayload: String = s"""
+                   |{
+                   |  "totalRecords": 1000
+                   |}
+                   |""".stripMargin
+
   val makeReturnSummaryCallback: HttpRequestBuilder =
     http("Make return summary callback")
       .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}/2025-26/#{month}")
       .headers(headerWithBearerTokenAndContentTypeJson)
-      .body(StringBody { session =>
-        val payload = s"""
-                          |{
-                          |  "totalRecords": 1000
-                          |}
-                          |""".stripMargin
-        payload
-      })
+      .body(StringBody(NpsCallbackPayload))
       .check(status.is(204))
 
-  val triggerReportReadyScenario: HttpRequestBuilder =
+  val generateReconciliationReportPayload: String = s"""
+         {
+                   |    "oversubscribed": 1,
+                   |    "traceAndMatch": 2,
+                   |    "failedEligibility": 3
+                   |}""".stripMargin
+
+  val generateReconciliationReportScenario: HttpRequestBuilder =
     http("Trigger report ready scenario")
       .post(s"$disaReturnsTestSupportBaseUrl/#{isaManagerReference}/2025-26/#{month}/$testSupportPath")
       .headers(headerWithBearerTokenAndContentTypeJson)
-      .body(StringBody { session =>
-        val payload = s"""
-         {
-                         |    "oversubscribed": 1,
-                         |    "traceAndMatch": 2,
-                         |    "failedEligibility": 3
-                         |}""".stripMargin
-        payload
-      })
+      .body(StringBody(generateReconciliationReportPayload))
       .check(status.is(204))
 
   val getReportingResultsSummary: HttpRequestBuilder =

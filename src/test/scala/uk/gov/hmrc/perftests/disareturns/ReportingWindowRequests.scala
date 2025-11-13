@@ -21,28 +21,24 @@ import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
+import uk.gov.hmrc.perftests.disareturns.models.SetupAssertions
 
 import javax.inject.Singleton
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class ReportingWindowRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) {
+class ReportingWindowRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
   val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
 
-  def setReportingWindowsOpen(): Unit = {
-    val url = s"$disaReturnsStubHost$reportingWindowPath"
-
-    val response = ws
-      .url(url)
+  def setReportingWindowsOpen(): Future[Unit] = {
+    ws.url(s"$disaReturnsStubHost$reportingWindowPath")
       .addHttpHeaders(reportingWindowHeaders.toSeq: _*)
       .post(reportingWindowPayload.toString())
-      .map(identity)
-    val result   = Await.result(response, 10.seconds)
-    if (result.status != 204) {
-      throw new RuntimeException(
-        s"Failed to set the reporting window open. Status ${result.status}, body: ${result.body}"
-      )
-    }
+      .map { response =>
+        ensureSetup(
+          response.status == 204,
+          s"Failed to set the reporting window open. Status=${response.status}, Body=${response.body}"
+        )
+      }
   }
 }
