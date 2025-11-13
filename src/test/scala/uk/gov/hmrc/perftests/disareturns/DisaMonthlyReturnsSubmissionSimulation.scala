@@ -30,20 +30,17 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
 
   before {
     setupData = testDataSetup()
-    println(Console.GREEN + "6" + Console.RESET)
   }
 
   after {
     testDataCleanUp(setupData)
   }
 
-  val bearerTokenInformation: Iterator[Map[String, Any]] = Iterator.continually(
-    Map("bearerToken" -> setupData.bearerToken)
-  )
+  val bearerTokenFeeder: ChainBuilder = feed(Iterator.continually(
+    Map("bearerToken" -> setupData.bearerToken)))
 
-  val clientIdInformation: Iterator[Map[String, String]] = Iterator.continually(
-    Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size)))
-  )
+  val clientIdFeeder: ChainBuilder = feed(Iterator.continually(
+    Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size)))))
 
 
   def generateReportInformation(): Iterator[Map[String, String]] = {
@@ -55,41 +52,26 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
       )
     )
   }
-
-  val isaMonthlyReportInformation: Iterator[Map[String, String]] = generateReportInformation()
-  val reconciliationReportJourneyOneInformation: Iterator[Map[String, String]] = generateReportInformation()
-  val reconciliationReportJourneyTwoInformation: Iterator[Map[String, String]] = generateReportInformation()
-
-  val bearerTokenFeeder: ChainBuilder = feed(bearerTokenInformation)
-
-  val clientIdFeeder: ChainBuilder = feed(clientIdInformation)
-
-  val isaReportInformationFeeder: ChainBuilder = feed(isaMonthlyReportInformation)
-
-  val reconciliationReportJourneyOneFeeder: ChainBuilder = feed(reconciliationReportJourneyOneInformation)
-
-  val reconciliationReportJourneyTwoFeeder: ChainBuilder = feed(reconciliationReportJourneyTwoInformation)
-
   setup(
     "Disa-Monthly-returns-Submission",
     "Disa Monthly returns submission"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ isaReportInformationFeeder.actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
+  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
     submitMonthlyReport,
     submitDeclaration
   )
-
   setup(
     "Reconciliation-Report-Journey-1",
     "Reconciliation Report Journey through the call back api"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ reconciliationReportJourneyOneFeeder.actionBuilders: _*) withRequests (
+  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders: _*) withRequests (
     makeReturnSummaryCallback,
     getReportingResultsSummary
   )
 
+  //This can probably be removed if we are having our own repo for test-support-api
   setup(
     "Reconciliation-Report-Journey-2",
     "Reconciliation Report Journey through the test support api"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ reconciliationReportJourneyTwoFeeder.actionBuilders: _*) withRequests (
+  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders: _*) withRequests (
     generateReconciliationReportScenario,
     getReportingResultsSummary
   )

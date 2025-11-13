@@ -31,27 +31,22 @@ trait BaseRequests {
   val authRequests                  = new AuthRequests(wsClient)
   val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
   val reportingWindowRequests       = new ReportingWindowRequests(wsClient)
-  val noOfThirdPartyApplications    = 1
+  val noOfThirdPartyApplications    = 10
 
   def testDataSetup(): TestDataSetupResult = {
     try {
       val extractedToken = Await.result(authRequests.getSubmissionBearerToken, 10.seconds)
-      println(Console.GREEN + "1" + Console.RESET)
       Await.result(reportingWindowRequests.setReportingWindowsOpen(), 10.seconds)
-      println(Console.GREEN + "2" + Console.RESET)
       val futureApps: Future[List[ClientApplication]] = Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
         for {
           app <- thirdPartyApplicationRequests.createClientApplication(extractedToken)
           _   <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
         } yield app
       }
-      println(Console.GREEN + "3" + Console.RESET)
       val appData: List[ClientApplication] = Await.result(futureApps, 30.seconds)
       val clientIds      = appData.map(_.clientId)
       val applicationIds = appData.map(_.applicationId)
-      println(Console.GREEN + "4" + Console.RESET)
       Await.result(thirdPartyApplicationRequests.createSubscriptionFields(), 5.seconds)
-      println(Console.GREEN + "5" + Console.RESET)
 
       TestDataSetupResult(
         bearerToken    = extractedToken,

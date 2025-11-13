@@ -46,11 +46,13 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
       |    }
       |  ]
       |}""".stripMargin
+
   val notificationBoxPayload: String =
     """{
       |  "boxName": "obligations/declaration/isa/return##1.0##callbackUrl",
       |  "clientId": "CLIENT_ID"
       |}""".stripMargin
+
   val subscriptionFieldsPayload: String =
     """{
       |  "fieldDefinitions": [
@@ -80,7 +82,6 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
       )
       .post(clientApplicationPayload)
       .map { response =>
-        println(Console.YELLOW + "1" + Console.RESET)
         ensureSetup(
           response.status == 201,
           s"Failed to create client application. Status=${response.status}, Body=${response.body}"
