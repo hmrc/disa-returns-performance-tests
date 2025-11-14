@@ -17,7 +17,7 @@
 package uk.gov.hmrc.perftests.disareturns.models
 
 case class TestDataSetupResult(
-                                bearerToken: String,
-                                clientIds: List[String],
-                                applicationIds: List[String]
-                              )
+  bearerToken: String,
+  clientIds: List[String],
+  applicationIds: List[String]
+)

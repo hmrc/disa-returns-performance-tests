@@ -19,7 +19,7 @@ package uk.gov.hmrc.perftests.disareturns.testSetup
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.ggSignInUrl
-import uk.gov.hmrc.perftests.disareturns.models.SetupAssertions
+import uk.gov.hmrc.perftests.disareturns.models.{SetupAssertions, SetupFailure}
 
 import javax.inject.Singleton
 import scala.concurrent.{ExecutionContext, Future}
@@ -27,26 +27,27 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
 
-  val authRequestPayload: String = """{
-                                     |  "internalId": "Int-a7688cda-d983-472d-9971-ddca5f124641",
-                                     |  "externalId": "Ext-c4ebc935-ac7a-4cc2-950a-19e6fac91f2a",
-                                     |  "credentials": {
-                                     |    "providerId": "8124873381064832",
-                                     |    "providerType": "GovernmentGateway"
-                                     |  },
-                                     |  "credentialRole": "User",
-                                     |  "agentInformation": {},
-                                     |  "affinityGroup": "Organisation",
-                                     |  "credId": "1234567890",
-                                     |  "credentialStrength": "strong",
-                                     |  "enrolments": [
-                                     |    {
-                                     |      "key": "",
-                                     |      "identifiers": [],
-                                     |      "state": ""
-                                     |    }
-                                     |  ]
-                                     |}""".stripMargin
+  val authRequestPayload: String =
+    """{
+      |  "internalId": "Int-a7688cda-d983-472d-9971-ddca5f124641",
+      |  "externalId": "Ext-c4ebc935-ac7a-4cc2-950a-19e6fac91f2a",
+      |  "credentials": {
+      |    "providerId": "8124873381064832",
+      |    "providerType": "GovernmentGateway"
+      |  },
+      |  "credentialRole": "User",
+      |  "agentInformation": {},
+      |  "affinityGroup": "Organisation",
+      |  "credId": "1234567890",
+      |  "credentialStrength": "strong",
+      |  "enrolments": [
+      |    {
+      |      "key": "",
+      |      "identifiers": [],
+      |      "state": ""
+      |    }
+      |  ]
+      |}""".stripMargin
 
   def getSubmissionBearerToken: Future[String] = {
     val url         = ggSignInUrl
@@ -67,7 +68,7 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
           .header("Authorization")
           .flatMap(str => bearerRegex.findFirstMatchIn(str))
           .map(_.matched)
-          .getOrElse(throw new RuntimeException("Bearer token missing or invalid"))
+          .getOrElse(throw SetupFailure("Bearer token missing or invalid"))
       }
   }
 }
