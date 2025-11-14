@@ -55,7 +55,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
 
   setup(
     "monthly-returns-submission-journey",
-    "Monthly returns submission"
+    "Monthly returns submission journey"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
     generateReportInformation()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
