@@ -20,11 +20,11 @@ import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
-import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerOnlyWithBearerToken, headerWithBearerTokenAndContentTypeJson}
+import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerOnlyWithBearerToken, headerWithJsonContentType}
 
-object ReconciliationReportService {
+object MonthlyReconciliationReportRequests {
 
-  val NpsCallbackPayload: String = s"""
+  val npsCallbackPayload: String = s"""
                    |{
                    |  "totalRecords": 1000
                    |}
@@ -33,8 +33,8 @@ object ReconciliationReportService {
   val submitReturnSummaryCallback: HttpRequestBuilder =
     http("Submit Return summary callback")
       .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}/2025-26/#{month}")
-      .headers(headerWithBearerTokenAndContentTypeJson)
-      .body(StringBody(NpsCallbackPayload))
+      .headers(headerWithJsonContentType)
+      .body(StringBody(npsCallbackPayload))
       .check(status.is(204))
 
   val generateReconciliationReportPayload: String = s"""
@@ -47,7 +47,7 @@ object ReconciliationReportService {
   val generateReconciliationReportScenario: HttpRequestBuilder =
     http("Generate Reconciliation Report")
       .post(s"$disaReturnsTestSupportBaseUrl/#{isaManagerReference}/2025-26/#{month}/$testSupportPath")
-      .headers(headerWithBearerTokenAndContentTypeJson)
+      .headers(headerWithJsonContentType)
       .body(StringBody(generateReconciliationReportPayload))
       .check(status.is(204))
 

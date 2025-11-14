@@ -14,12 +14,6 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns.Util
+package uk.gov.hmrc.perftests.disareturns.models
 
-import play.api.libs.json._
-
-trait NdjsonSupport {
-
-  def toNdjson(values: Seq[JsValue]): String =
-    values.map(_.toString).mkString("\n") + "\n"
-}
+case class ClientApplication(clientId: String, applicationId: String)

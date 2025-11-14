@@ -23,7 +23,7 @@ import uk.gov.hmrc.perftests.disareturns.Util.MockMonthlyReturnData.validNdjsonT
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsHost, disaReturnsRoute}
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.headerWithClientIdAndBearerToken
 
-object DisaMonthlyReturnsSubmissionRequests {
+object MonthlyReturnsSubmissionRequests {
   val submitMonthlyReport: HttpRequestBuilder =
     http("Submit monthly report")
       .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}")

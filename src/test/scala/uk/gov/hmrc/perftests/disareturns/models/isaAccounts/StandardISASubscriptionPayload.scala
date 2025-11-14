@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns.models
+package uk.gov.hmrc.perftests.disareturns.models.isaAccounts
 
 import play.api.libs.json.{Json, OFormat}
 
-case class LifetimeISASubscriptionPayload(
+case class StandardISASubscriptionPayload(
   accountNumber: String,
   nino: String,
   firstName: String,
@@ -31,11 +31,9 @@ case class LifetimeISASubscriptionPayload(
   totalCurrentYearSubscriptionsToDate: Double,
   marketValueOfAccount: Double,
   isaType: String,
-  dateOfFirstSubscription: String,
-  lisaQualifyingAddition: Double,
-  lisaBonusClaim: Double
+  flexibleIsa: Boolean
 )
 
-object LifetimeISASubscriptionPayload {
-  implicit val format: OFormat[LifetimeISASubscriptionPayload] = Json.format[LifetimeISASubscriptionPayload]
+object StandardISASubscriptionPayload {
+  implicit val format: OFormat[StandardISASubscriptionPayload] = Json.format[StandardISASubscriptionPayload]
 }

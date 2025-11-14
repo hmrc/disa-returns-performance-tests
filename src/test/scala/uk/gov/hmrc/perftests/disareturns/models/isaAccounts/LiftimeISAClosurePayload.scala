@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns.models
+package uk.gov.hmrc.perftests.disareturns.models.isaAccounts
 
 import play.api.libs.json.{Json, OFormat}
 

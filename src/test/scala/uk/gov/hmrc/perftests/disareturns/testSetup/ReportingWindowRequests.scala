@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns
+package uk.gov.hmrc.perftests.disareturns.testSetup
 
 import play.api.libs.json.{JsObject, Json}
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
-import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
+import uk.gov.hmrc.perftests.disareturns.constant.Headers.headerWithJsonContentType
 import uk.gov.hmrc.perftests.disareturns.models.SetupAssertions
 
 import javax.inject.Singleton
@@ -32,7 +32,7 @@ class ReportingWindowRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionC
 
   def setReportingWindowsOpen(): Future[Unit] =
     ws.url(s"$disaReturnsStubHost$reportingWindowPath")
-      .addHttpHeaders(reportingWindowHeaders.toSeq: _*)
+      .addHttpHeaders(headerWithJsonContentType.toSeq: _*)
       .post(reportingWindowPayload.toString())
       .map { response =>
         ensureSetup(

@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns
+package uk.gov.hmrc.perftests.disareturns.testSetup
+
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import org.scalatest.Assertions.cancel
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import uk.gov.hmrc.perftests.disareturns.models.{ClientApplication, TestDataSetupResult}
 
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -44,8 +46,8 @@ trait BaseRequests {
         } yield app
       }
       val appData: List[ClientApplication]            = Await.result(futureApps, 30.seconds)
-      val clientIds                                   = appData.map(_.clientId)
-      val applicationIds                              = appData.map(_.applicationId)
+      val clientIds: List[String]                     = appData.map(_.clientId)
+      val applicationIds: List[String]                = appData.map(_.applicationId)
       Await.result(thirdPartyApplicationRequests.createSubscriptionFields(), 5.seconds)
 
       TestDataSetupResult(
@@ -72,9 +74,3 @@ trait BaseRequests {
   }
 
 }
-case class ClientApplication(clientId: String, applicationId: String)
-case class TestDataSetupResult(
-  bearerToken: String,
-  clientIds: List[String],
-  applicationIds: List[String]
-)

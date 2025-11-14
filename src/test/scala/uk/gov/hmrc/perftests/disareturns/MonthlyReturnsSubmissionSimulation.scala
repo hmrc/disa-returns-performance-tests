@@ -19,12 +19,14 @@ package uk.gov.hmrc.perftests.disareturns
 import io.gatling.core.Predef.feed
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
-import uk.gov.hmrc.perftests.disareturns.DisaMonthlyReturnsSubmissionRequests.submitMonthlyReport
+import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
-import uk.gov.hmrc.perftests.disareturns.ReconciliationReportService.{generateReconciliationReportScenario, getReportingResultsSummary, submitReturnSummaryCallback}
+import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReport
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
+import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
+import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
-class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
+class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
   var setupData: TestDataSetupResult = _
 
@@ -50,18 +52,20 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
         "month"               -> getMonth
       )
     )
+
   setup(
-    "DISA-Monthly-Returns-Submission-Journey",
-    "DISA monthly returns submission"
+    "monthly-returns-submission-journey",
+    "Monthly returns submission"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
     generateReportInformation()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
     submitMonthlyReport,
     submitDeclaration
   )
+
   setup(
-    "Reconciliation-Report-Summary-Journey",
-    "Reconciliation report summary journey"
+    "monthly-reconciliation-report-summary-journey",
+    "Monthly reconciliation report summary journey"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
     generateReportInformation()
   ).actionBuilders: _*) withRequests (

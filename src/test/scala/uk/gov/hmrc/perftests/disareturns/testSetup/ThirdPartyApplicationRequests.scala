@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns
+package uk.gov.hmrc.perftests.disareturns.testSetup
 
-import play.api.libs.json.Json
+import play.api.libs.json.{JsValue, Json}
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
-import uk.gov.hmrc.perftests.disareturns.constant.Headers.{notificationBoxHadersMap, subscriptionFieldsHeadersMap}
-import uk.gov.hmrc.perftests.disareturns.models.{SetupAssertions, SetupFailure}
+import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerWithJsonContentType, notificationBoxHadersMap}
+import uk.gov.hmrc.perftests.disareturns.models.{ClientApplication, SetupAssertions, SetupFailure}
 
 import javax.inject.Singleton
 import scala.concurrent.{ExecutionContext, Future}
@@ -87,11 +87,11 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
           s"Failed to create client application. Status=${response.status}, Body=${response.body}"
         )
 
-        val json               = Json.parse(response.body)
-        val maybeClientId      = (json \ "details" \ "token" \ "clientId").asOpt[String].filter(_.nonEmpty)
-        val maybeApplicationId = (json \ "details" \ "id").asOpt[String].filter(_.nonEmpty)
+        val json: JsValue                 = Json.parse(response.body)
+        val clientId: Option[String]      = (json \ "details" \ "token" \ "clientId").asOpt[String].filter(_.nonEmpty)
+        val applicationId: Option[String] = (json \ "details" \ "id").asOpt[String].filter(_.nonEmpty)
 
-        (maybeClientId, maybeApplicationId) match {
+        (clientId, applicationId) match {
           case (Some(clientId), Some(applicationId)) =>
             ClientApplication(clientId, applicationId)
           case _                                     =>
@@ -114,7 +114,7 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
 
   def createSubscriptionFields(): Future[Unit] =
     ws.url(s"$api_subscription_fields_host$subscriptionPath")
-      .addHttpHeaders(subscriptionFieldsHeadersMap.toSeq: _*)
+      .addHttpHeaders(headerWithJsonContentType.toSeq: _*)
       .put(subscriptionFieldsPayload)
       .map { response =>
         ensureSetup(

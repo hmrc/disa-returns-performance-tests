@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns
+package uk.gov.hmrc.perftests.disareturns.testSetup
 
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
@@ -63,17 +63,11 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
           response.status == 201,
           s"Failed to retrieve bearer token. Status=${response.status}, Body=${response.body}"
         )
-        val authHeader = response.header("Authorization")
-        ensureSetup(
-          authHeader.isDefined,
-          s"Authorization header missing in token response. Body=${response.body}"
-        )
-        val token      = bearerRegex.findFirstMatchIn(authHeader.get)
-        ensureSetup(
-          token.isDefined,
-          s"Bearer token not found in Authorization header: ${authHeader.get}"
-        )
-        token.get.matched
+        response
+          .header("Authorization")
+          .flatMap(str => bearerRegex.findFirstMatchIn(str))
+          .map(_.matched)
+          .getOrElse(throw new RuntimeException("Bearer token missing or invalid"))
       }
   }
 }
