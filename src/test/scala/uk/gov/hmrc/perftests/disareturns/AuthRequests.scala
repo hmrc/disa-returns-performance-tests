@@ -49,13 +49,13 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
                                      |}""".stripMargin
 
   def getSubmissionBearerToken: Future[String] = {
-    val url = ggSignInUrl
+    val url         = ggSignInUrl
     val bearerRegex = "Bearer\\s+\\S+".r
 
     ws.url(url)
       .addHttpHeaders(
         "Content-Type" -> "application/json",
-        "Accept" -> "application/json"
+        "Accept"       -> "application/json"
       )
       .post(authRequestPayload)
       .map { response =>
@@ -68,7 +68,7 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
           authHeader.isDefined,
           s"Authorization header missing in token response. Body=${response.body}"
         )
-        val token = bearerRegex.findFirstMatchIn(authHeader.get)
+        val token      = bearerRegex.findFirstMatchIn(authHeader.get)
         ensureSetup(
           token.isDefined,
           s"Bearer token not found in Authorization header: ${authHeader.get}"

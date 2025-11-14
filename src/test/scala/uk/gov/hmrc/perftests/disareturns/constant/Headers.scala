@@ -31,12 +31,12 @@ object Headers {
   )
 
   val headerWithBearerTokenAndContentTypeJson: Map[String, String] = Map(
-    "Content-Type"  -> "application/json"
+    "Content-Type" -> "application/json"
   )
 
   val notificationBoxHadersMap: Map[String, String] = Map(
-    "Content-Type"  -> "application/json",
-    "User-Agent"    -> "disa-returns"
+    "Content-Type" -> "application/json",
+    "User-Agent"   -> "disa-returns"
   )
 
   val subscriptionFieldsHeadersMap: Map[String, String] = Map(

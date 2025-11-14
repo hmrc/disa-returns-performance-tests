@@ -30,7 +30,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class ReportingWindowRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
   val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
 
-  def setReportingWindowsOpen(): Future[Unit] = {
+  def setReportingWindowsOpen(): Future[Unit] =
     ws.url(s"$disaReturnsStubHost$reportingWindowPath")
       .addHttpHeaders(reportingWindowHeaders.toSeq: _*)
       .post(reportingWindowPayload.toString())
@@ -40,5 +40,4 @@ class ReportingWindowRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionC
           s"Failed to set the reporting window open. Status=${response.status}, Body=${response.body}"
         )
       }
-  }
 }

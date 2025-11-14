@@ -74,11 +74,11 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
       |  ]
       |}""".stripMargin
 
-  def createClientApplication(token: String): Future[ClientApplication] = {
+  def createClientApplication(token: String): Future[ClientApplication] =
     ws.url(s"$third_party_application_host$thirdPartyApplicationPath")
       .addHttpHeaders(
         "Authorization" -> token,
-        "Content-Type" -> "application/json"
+        "Content-Type"  -> "application/json"
       )
       .post(clientApplicationPayload)
       .map { response =>
@@ -87,22 +87,21 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
           s"Failed to create client application. Status=${response.status}, Body=${response.body}"
         )
 
-        val json = Json.parse(response.body)
-        val maybeClientId = (json \ "details" \ "token" \ "clientId").asOpt[String].filter(_.nonEmpty)
+        val json               = Json.parse(response.body)
+        val maybeClientId      = (json \ "details" \ "token" \ "clientId").asOpt[String].filter(_.nonEmpty)
         val maybeApplicationId = (json \ "details" \ "id").asOpt[String].filter(_.nonEmpty)
 
         (maybeClientId, maybeApplicationId) match {
           case (Some(clientId), Some(applicationId)) =>
             ClientApplication(clientId, applicationId)
-          case _ =>
+          case _                                     =>
             throw SetupFailure(
               s"JSON validation failed: 'clientId' or 'applicationId' missing/empty. Body=${response.body}"
             )
         }
       }
-  }
 
-  def createNotificationBox(clientId: String): Future[Unit] = {
+  def createNotificationBox(clientId: String): Future[Unit] =
     ws.url(s"$ppns_host$ppnsPath")
       .withHttpHeaders(notificationBoxHadersMap.toSeq: _*)
       .put(notificationBoxPayload.replace("CLIENT_ID", clientId))
@@ -112,9 +111,8 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
           s"Failed to create notification box. Status=${response.status}, Body=${response.body}"
         )
       }
-  }
 
-  def createSubscriptionFields(): Future[Unit] = {
+  def createSubscriptionFields(): Future[Unit] =
     ws.url(s"$api_subscription_fields_host$subscriptionPath")
       .addHttpHeaders(subscriptionFieldsHeadersMap.toSeq: _*)
       .put(subscriptionFieldsPayload)
@@ -124,9 +122,8 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
           s"Failed to create subscription fields. Status=${response.status}, Body=${response.body}"
         )
       }
-  }
 
-  def deleteClientApplication(token: String, clientId: String): Future[Unit] = {
+  def deleteClientApplication(token: String, clientId: String): Future[Unit] =
     ws.url(s"$third_party_application_host$thirdPartyApplicationPath/$clientId/delete")
       .addHttpHeaders("Authorization" -> token)
       .post("")
@@ -136,5 +133,4 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
           s"Failed to delete client application. Status=${response.status}, Body=${response.body}"
         )
       }
-  }
 }

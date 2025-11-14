@@ -33,9 +33,9 @@ trait BaseRequests {
   val reportingWindowRequests       = new ReportingWindowRequests(wsClient)
   val noOfThirdPartyApplications    = 10
 
-  def testDataSetup(): TestDataSetupResult = {
+  def testDataSetup(): TestDataSetupResult =
     try {
-      val extractedToken = Await.result(authRequests.getSubmissionBearerToken, 10.seconds)
+      val extractedToken                              = Await.result(authRequests.getSubmissionBearerToken, 10.seconds)
       Await.result(reportingWindowRequests.setReportingWindowsOpen(), 10.seconds)
       val futureApps: Future[List[ClientApplication]] = Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
         for {
@@ -43,14 +43,14 @@ trait BaseRequests {
           _   <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
         } yield app
       }
-      val appData: List[ClientApplication] = Await.result(futureApps, 30.seconds)
-      val clientIds      = appData.map(_.clientId)
-      val applicationIds = appData.map(_.applicationId)
+      val appData: List[ClientApplication]            = Await.result(futureApps, 30.seconds)
+      val clientIds                                   = appData.map(_.clientId)
+      val applicationIds                              = appData.map(_.applicationId)
       Await.result(thirdPartyApplicationRequests.createSubscriptionFields(), 5.seconds)
 
       TestDataSetupResult(
-        bearerToken    = extractedToken,
-        clientIds      = clientIds,
+        bearerToken = extractedToken,
+        clientIds = clientIds,
         applicationIds = applicationIds
       )
 
@@ -58,7 +58,6 @@ trait BaseRequests {
       case e: Exception =>
         cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
-  }
 
   def testDataCleanUp(setupData: TestDataSetupResult): Unit = try
     setupData.applicationIds.foreach { appId =>

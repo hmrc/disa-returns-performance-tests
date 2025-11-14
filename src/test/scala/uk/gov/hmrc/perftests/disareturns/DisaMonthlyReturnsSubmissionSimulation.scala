@@ -21,7 +21,7 @@ import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.DisaMonthlyReturnsSubmissionRequests.submitMonthlyReport
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
-import uk.gov.hmrc.perftests.disareturns.ReconciliationReportService.{generateReconciliationReportScenario, getReconciliationResultsSummary, submitReturnSummaryCallback}
+import uk.gov.hmrc.perftests.disareturns.ReconciliationReportService.{generateReconciliationReportScenario, getReportingResultsSummary, submitReturnSummaryCallback}
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
 
 class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
@@ -36,44 +36,37 @@ class DisaMonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with 
     testDataCleanUp(setupData)
   }
 
-  val bearerTokenFeeder: ChainBuilder = feed(Iterator.continually(
-    Map("bearerToken" -> setupData.bearerToken)))
+  val bearerTokenFeeder: ChainBuilder = feed(Iterator.continually(Map("bearerToken" -> setupData.bearerToken)))
 
-  val clientIdFeeder: ChainBuilder = feed(Iterator.continually(
-    Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size)))))
+  val clientIdFeeder: ChainBuilder = feed(
+    Iterator.continually(Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size))))
+  )
 
-
-  def generateReportInformation(): Iterator[Map[String, String]] = {
+  def generateReportInformation(): Iterator[Map[String, String]] =
     Iterator.continually(
       Map(
         "isaManagerReference" -> generateRandomISAReference(),
-        "taxYear" -> getTaxYear,
-        "month" -> getMonth
+        "taxYear"             -> getTaxYear,
+        "month"               -> getMonth
       )
     )
-  }
   setup(
     "DISA-Monthly-Returns-Submission-Journey",
     "DISA monthly returns submission"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
+  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
+    generateReportInformation()
+  ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
     submitMonthlyReport,
     submitDeclaration
   )
   setup(
     "Reconciliation-Report-Summary-Journey",
     "Reconciliation report summary journey"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders: _*) withRequests (
+  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
+    generateReportInformation()
+  ).actionBuilders: _*) withRequests (
     submitReturnSummaryCallback,
-    getReconciliationResultsSummary
-  )
-
-  //This can probably be removed if we are having our own repo for test-support-api
-  setup(
-    "Reconciliation-Report-Journey-2",
-    "Reconciliation Report Journey through the test support api"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(generateReportInformation()).actionBuilders: _*) withRequests (
-    generateReconciliationReportScenario,
-    getReconciliationResultsSummary
+    getReportingResultsSummary
   )
 
   runSimulation()
