@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 HM Revenue & Customs
+ * Copyright 2023 HM Revenue & Customs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,19 +19,15 @@ package uk.gov.hmrc.perftests.disareturns
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
-import play.api.libs.json.{JsObject, Json}
-import uk.gov.hmrc.performance.conf.ServicesConfiguration
-import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
-import uk.gov.hmrc.perftests.disareturns.constant.Headers.reportingWindowHeaders
+import uk.gov.hmrc.perftests.disareturns.Util.MockMonthlyReturnData.validNdjsonTestData
+import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsHost, disaReturnsRoute}
+import uk.gov.hmrc.perftests.disareturns.constant.Headers.headerWithClientIdAndBearerToken
 
-object ReportingWindowRequests extends ServicesConfiguration {
-  val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
-
-  val setReportingWindowsOpen: HttpRequestBuilder =
-    http("Set reporting window as Open")
-      .post(s"$disaReturnsStubHost$reportingWindowPath")
-      .headers(reportingWindowHeaders)
-      .body(StringBody(reportingWindowPayload.toString()))
+object MonthlyReturnsSubmissionRequests {
+  val submitMonthlyReport: HttpRequestBuilder =
+    http("Submit monthly report")
+      .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}")
+      .headers(headerWithClientIdAndBearerToken)
+      .body(StringBody(validNdjsonTestData()))
       .check(status.is(204))
-      .silent
 }

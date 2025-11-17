@@ -16,6 +16,8 @@
 
 package uk.gov.hmrc.perftests.disareturns.Util
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import scala.util.Random
 
 object RandomDataGenerator {
@@ -27,8 +29,21 @@ object RandomDataGenerator {
     nino
   }
 
-  def generateAccountNumber(): String = {
+  def generateAccountNumber(): String      = {
     val number = Random.nextInt(999999) + 1
     f"STD$number%06d"
+  }
+  def generateRandomISAReference(): String =
+    f"Z${scala.util.Random.nextInt(10000)}%04d"
+
+  def getMonth: String = {
+    val dateFormatter = DateTimeFormatter.ofPattern("MMM")
+    LocalDate.now().format(dateFormatter).toUpperCase
+  }
+
+  def getTaxYear: String = {
+    val currentYear       = java.time.Year.now.getValue
+    val nextYearTwoDigits = (currentYear + 1) % 100
+    f"$currentYear-$nextYearTwoDigits%02d"
   }
 }

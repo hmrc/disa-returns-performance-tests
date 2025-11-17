@@ -17,7 +17,7 @@
 package uk.gov.hmrc.perftests.disareturns.Util
 
 import play.api.libs.json.Json
-import uk.gov.hmrc.perftests.disareturns.models.{LifetimeISASubscriptionPayload, LiftimeISAClosurePayload, StandardISAClosurePayload, StandardISASubscriptionPayload}
+import uk.gov.hmrc.perftests.disareturns.models.isaAccounts.{LifetimeISASubscriptionPayload, LiftimeISAClosurePayload, StandardISAClosurePayload, StandardISASubscriptionPayload}
 
 object MockMonthlyReturnData extends NdjsonSupport {
 

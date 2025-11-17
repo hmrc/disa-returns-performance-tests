@@ -26,22 +26,12 @@ object Headers {
     "Authorization" -> "#{bearerToken}"
   )
 
-  val reportingWindowHeaders: Map[String, String] = Map(
+  val headerWithJsonContentType: Map[String, String] = Map(
     "Content-Type" -> "application/json"
-  )
-
-  val headerWithBearerTokenAndContentTypeJson: Map[String, String] = Map(
-    "Content-Type"  -> "application/json",
-    "Authorization" -> "#{bearerToken}"
   )
 
   val notificationBoxHadersMap: Map[String, String] = Map(
-    "Content-Type"  -> "application/json",
-    "Authorization" -> "#{bearerToken}",
-    "User-Agent"    -> "disa-returns"
-  )
-
-  val subscriptionFieldsHeadersMap: Map[String, String] = Map(
-    "Content-Type" -> "application/json"
+    "Content-Type" -> "application/json",
+    "User-Agent"   -> "disa-returns"
   )
 }

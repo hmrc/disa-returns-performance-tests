@@ -14,17 +14,10 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns.Util
+package uk.gov.hmrc.perftests.disareturns.models
 
-import scala.io.Source
-
-object FileReader {
-
-  def readLines(fileName: String): Seq[String] = {
-    val source = Source.fromResource("data/" + fileName + ".txt")
-    try
-      source.getLines().toSeq
-    finally
-      source.close()
-  }
-}
+case class TestDataSetupResult(
+  bearerToken: String,
+  clientIds: List[String],
+  applicationIds: List[String]
+)

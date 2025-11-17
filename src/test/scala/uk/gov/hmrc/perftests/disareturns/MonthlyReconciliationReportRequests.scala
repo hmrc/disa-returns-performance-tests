@@ -19,38 +19,36 @@ package uk.gov.hmrc.perftests.disareturns
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
-import uk.gov.hmrc.performance.conf.ServicesConfiguration
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
-import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerOnlyWithBearerToken, headerWithBearerTokenAndContentTypeJson}
+import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerOnlyWithBearerToken, headerWithJsonContentType}
 
-object ReconciliationReportService extends ServicesConfiguration {
-  val makeReturnSummaryCallback: HttpRequestBuilder =
-    http("Make return summary callback")
+object MonthlyReconciliationReportRequests {
+
+  val npsCallbackPayload: String = s"""
+                   |{
+                   |  "totalRecords": 1000
+                   |}
+                   |""".stripMargin
+
+  val submitReturnSummaryCallback: HttpRequestBuilder =
+    http("Submit Return summary callback")
       .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}/2025-26/#{month}")
-      .headers(headerWithBearerTokenAndContentTypeJson)
-      .body(StringBody { session =>
-        val payload = s"""
-                          |{
-                          |  "totalRecords": 1000
-                          |}
-                          |""".stripMargin
-        payload
-      })
+      .headers(headerWithJsonContentType)
+      .body(StringBody(npsCallbackPayload))
       .check(status.is(204))
 
-  val triggerReportReadyScenario: HttpRequestBuilder =
-    http("Trigger report ready scenario")
-      .post(s"$disaReturnsTestSupportBaseUrl/#{isaManagerReference}/2025-26/#{month}/$testSupportPath")
-      .headers(headerWithBearerTokenAndContentTypeJson)
-      .body(StringBody { session =>
-        val payload = s"""
+  val generateReconciliationReportPayload: String = s"""
          {
-                         |    "oversubscribed": 1,
-                         |    "traceAndMatch": 2,
-                         |    "failedEligibility": 3
-                         |}""".stripMargin
-        payload
-      })
+                   |    "oversubscribed": 1,
+                   |    "traceAndMatch": 2,
+                   |    "failedEligibility": 3
+                   |}""".stripMargin
+
+  val generateReconciliationReportScenario: HttpRequestBuilder =
+    http("Generate Reconciliation Report")
+      .post(s"$disaReturnsTestSupportBaseUrl/#{isaManagerReference}/2025-26/#{month}/$testSupportPath")
+      .headers(headerWithJsonContentType)
+      .body(StringBody(generateReconciliationReportPayload))
       .check(status.is(204))
 
   val getReportingResultsSummary: HttpRequestBuilder =

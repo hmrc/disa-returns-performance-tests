@@ -16,26 +16,9 @@
 
 package uk.gov.hmrc.perftests.disareturns.models
 
-import play.api.libs.json.{Json, OFormat}
+case class SetupFailure(message: String) extends RuntimeException(message)
 
-case class StandardISAClosurePayload(
-  accountNumber: String,
-  nino: String,
-  firstName: String,
-  middleName: String,
-  lastName: String,
-  dateOfBirth: String,
-  amountTransferredIn: Double,
-  amountTransferredOut: Double,
-  dateOfLastSubscription: String,
-  totalCurrentYearSubscriptionsToDate: Double,
-  marketValueOfAccount: Double,
-  isaType: String,
-  flexibleIsa: Boolean,
-  closureDate: String,
-  reasonForClosure: String
-)
-
-object StandardISAClosurePayload {
-  implicit val format: OFormat[StandardISAClosurePayload] = Json.format[StandardISAClosurePayload]
+trait SetupAssertions {
+  def ensureSetup(condition: Boolean, message: => String): Unit =
+    if (!condition) throw SetupFailure(message)
 }
