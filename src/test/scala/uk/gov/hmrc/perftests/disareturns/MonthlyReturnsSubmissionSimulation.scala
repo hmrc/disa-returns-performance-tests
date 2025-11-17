@@ -22,6 +22,7 @@ import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReport
+import uk.gov.hmrc.perftests.disareturns.ObligationRequests.openObligationStatus
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
 import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
@@ -60,7 +61,8 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     generateReportInformation()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
     submitMonthlyReport,
-    submitDeclaration
+    submitDeclaration,
+    openObligationStatus
   )
 
   setup(
