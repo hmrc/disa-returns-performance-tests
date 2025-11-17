@@ -23,7 +23,7 @@ object AppConfig extends ServicesConfiguration {
   val disaReturnsTestSupportHost: String    = baseUrlFor("disa-returns-test-support-api")
   val disaReturnsRoute: String              = "/monthly/"
   val disaReturnsCallbackPath: String       = "/callback/monthly/"
-  val authHost: String                      = baseUrlFor("auth-login-stub")
+  val authHost: String                      = baseUrlFor("auth-login-api")
   val ggSignInUrl                           = s"$authHost/government-gateway/session/login"
   val disaReturnsStubHost: String           = baseUrlFor("disa-returns-stub")
   val reportingWindowPath: String           = "/test-only/etmp/reporting-window-state"
