@@ -26,12 +26,15 @@ import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRando
 import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
+import scala.concurrent.Await
+import scala.concurrent.duration.DurationInt
+
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
   var setupData: TestDataSetupResult = _
 
   before {
-    setupData = testDataSetup()
+    setupData = Await.result(testDataSetup(), 30.seconds)
   }
 
   after {

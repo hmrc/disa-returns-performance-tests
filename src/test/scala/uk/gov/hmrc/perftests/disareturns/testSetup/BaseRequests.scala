@@ -20,57 +20,45 @@ import akka.actor.ActorSystem
 import akka.stream.Materializer
 import org.scalatest.Assertions.cancel
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
-import uk.gov.hmrc.perftests.disareturns.models.{ClientApplication, TestDataSetupResult}
+import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
 
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 
 trait BaseRequests {
-  implicit val system: ActorSystem  = ActorSystem("setup-system")
-  implicit val mat: Materializer    = Materializer(system)
+  implicit val system: ActorSystem = ActorSystem("setup-system")
+  implicit val mat: Materializer = Materializer(system)
   implicit val ec: ExecutionContext = system.dispatcher
-  val wsClient                      = StandaloneAhcWSClient()
-  val authRequests                  = new AuthRequests(wsClient)
+  val wsClient: StandaloneAhcWSClient = StandaloneAhcWSClient()
+  val authRequests = new AuthRequests(wsClient)
   val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
-  val reportingWindowRequests       = new ReportingWindowRequests(wsClient)
-  val noOfThirdPartyApplications    = 10
+  val reportingWindowRequests = new ReportingWindowRequests(wsClient)
+  val noOfThirdPartyApplications = 10
 
-  def testDataSetup(): TestDataSetupResult =
-    try {
-      val extractedToken                              = Await.result(authRequests.getSubmissionBearerToken, 10.seconds)
-      Await.result(reportingWindowRequests.setReportingWindowsOpen(), 10.seconds)
-      val futureApps: Future[List[ClientApplication]] = Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
+  def testDataSetup(): Future[TestDataSetupResult] = {
+    val setup = for {
+      bearerToken <- authRequests.getSubmissionBearerToken
+      _ <- reportingWindowRequests.setReportingWindowsOpen()
+      apps <- Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
         for {
-          app <- thirdPartyApplicationRequests.createClientApplication(extractedToken)
-          _   <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
+          app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
+          _ <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
         } yield app
       }
-      val appData: List[ClientApplication]            = Await.result(futureApps, 30.seconds)
-      val clientIds: List[String]                     = appData.map(_.clientId)
-      val applicationIds: List[String]                = appData.map(_.applicationId)
-      Await.result(thirdPartyApplicationRequests.createSubscriptionFields(), 5.seconds)
-
-      TestDataSetupResult(
-        bearerToken = extractedToken,
-        clientIds = clientIds,
-        applicationIds = applicationIds
-      )
-
-    } catch {
-      case e: Exception =>
-        cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
+      _ <- thirdPartyApplicationRequests.createSubscriptionFields()
+    } yield TestDataSetupResult(bearerToken = bearerToken, clientIds = apps.map(_.clientId), applicationIds = apps.map(_.applicationId))
+    setup.recover { case e =>
+      cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
-
-  def testDataCleanUp(setupData: TestDataSetupResult): Unit = try
-    setupData.applicationIds.foreach { appId =>
-      Await.result(
-        thirdPartyApplicationRequests.deleteClientApplication(setupData.bearerToken, appId),
-        5.seconds
-      )
-    }
-  finally {
-    wsClient.close()
-    system.terminate()
   }
 
+  def testDataCleanUp(setupData: TestDataSetupResult): Future[Unit] =
+    Future
+      .traverse(setupData.applicationIds)(appId =>
+        thirdPartyApplicationRequests.deleteClientApplication(setupData.bearerToken, appId)
+      )
+      .map(_ => ())
+      .andThen { case _ =>
+        wsClient.close()
+        system.terminate()
+      }
 }

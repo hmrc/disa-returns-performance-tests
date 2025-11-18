@@ -123,9 +123,9 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
         )
       }
 
-  def deleteClientApplication(token: String, clientId: String): Future[Unit] =
+  def deleteClientApplication(bearerToken: String, clientId: String): Future[Unit] =
     ws.url(s"$third_party_application_host$thirdPartyApplicationPath/$clientId/delete")
-      .addHttpHeaders("Authorization" -> token)
+      .addHttpHeaders("Authorization" -> bearerToken)
       .post("")
       .map { response =>
         ensureSetup(
