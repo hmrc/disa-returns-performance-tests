@@ -38,9 +38,12 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
       |  "credentialStrength": "strong",
       |  "enrolments": [
       |    {
-      |      "key": "",
-      |      "identifiers": [],
-      |      "state": ""
+      |      "key": "HMRC-DISA-ORG",
+      |      "identifiers": [{
+      |         "key":"ZREF",
+      |         "value":"Z5612"
+      |      }],
+      |      "state": "Activated"
       |    }
       |  ]
       |}""".stripMargin

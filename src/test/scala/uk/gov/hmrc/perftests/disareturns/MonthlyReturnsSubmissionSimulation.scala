@@ -20,6 +20,7 @@ import io.gatling.core.Predef.feed
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
+import uk.gov.hmrc.perftests.disareturns.MonthlyReturnLoginRequest.authenticateISAManager
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReport
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
@@ -47,10 +48,19 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     Iterator.continually(Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size))))
   )
 
-  def generateReportInformation(): Iterator[Map[String, String]] =
+  def generateReportInformationForTheSubmission(): Iterator[Map[String, String]] =
     Iterator.continually(
       Map(
-        "isaManagerReference" -> generateRandomISAReference(),
+        "isaManagerReference" -> generateRandomISAReference(1, 500),
+        "taxYear"             -> getTaxYear,
+        "month"               -> getMonth
+      )
+    )
+
+  def generateReportInformationForTheDeclaration(): Iterator[Map[String, String]] =
+    Iterator.continually(
+      Map(
+        "isaManagerReference" -> generateRandomISAReference(501, 999),
         "taxYear"             -> getTaxYear,
         "month"               -> getMonth
       )
@@ -60,9 +70,19 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     "monthly-returns-submission-journey",
     "Monthly returns submission journey"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
-    generateReportInformation()
+    generateReportInformationForTheSubmission()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
-    submitMonthlyReport,
+    authenticateISAManager,
+    submitMonthlyReport
+  )
+
+  setup(
+    "monthly-returns-declaration-journey",
+    "Monthly returns declaration journey"
+  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
+    generateReportInformationForTheDeclaration()
+  ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
+    authenticateISAManager,
     submitDeclaration
   )
 
@@ -70,8 +90,9 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     "monthly-reconciliation-report-summary-journey",
     "Monthly reconciliation report summary journey"
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
-    generateReportInformation()
+    generateReportInformationForTheSubmission()
   ).actionBuilders: _*) withRequests (
+    authenticateISAManager,
     submitReturnSummaryCallback,
     getReportingResultsSummary
   )
