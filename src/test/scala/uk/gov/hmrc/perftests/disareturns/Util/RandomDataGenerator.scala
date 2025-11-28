@@ -29,12 +29,16 @@ object RandomDataGenerator {
     nino
   }
 
-  def generateAccountNumber(): String      = {
+  def generateAccountNumber(): String = {
     val number = Random.nextInt(999999) + 1
     f"STD$number%06d"
   }
-  def generateRandomISAReference(): String =
-    f"Z${scala.util.Random.nextInt(10000)}%04d"
+
+  def generateRandomISAReference(min: Int, max: Int): String = {
+    require(min <= max, "min must be <= max")
+    val num = scala.util.Random.nextInt(max - min + 1) + min
+    f"Z$num%04d"
+  }
 
   def getMonth: String = {
     val dateFormatter = DateTimeFormatter.ofPattern("MMM")
