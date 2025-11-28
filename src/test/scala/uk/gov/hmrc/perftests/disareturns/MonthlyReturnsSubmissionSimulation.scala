@@ -20,7 +20,7 @@ import io.gatling.core.Predef.feed
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
-import uk.gov.hmrc.perftests.disareturns.MonthlyReturnLoginRequest.authenticateISAManager
+import uk.gov.hmrc.perftests.disareturns.MonthlyReturnLoginRequest.getBearerToken
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReport
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
@@ -72,7 +72,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
     generateReportInformationForTheSubmission()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
-    authenticateISAManager,
+    getBearerToken,
     submitMonthlyReport
   )
 
@@ -82,7 +82,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
     generateReportInformationForTheDeclaration()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
-    authenticateISAManager,
+    getBearerToken,
     submitDeclaration
   )
 
@@ -92,7 +92,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
     generateReportInformationForTheSubmission()
   ).actionBuilders: _*) withRequests (
-    authenticateISAManager,
+    getBearerToken,
     submitReturnSummaryCallback,
     getReportingResultsSummary
   )

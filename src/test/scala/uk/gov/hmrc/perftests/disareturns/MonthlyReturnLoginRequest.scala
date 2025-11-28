@@ -43,12 +43,12 @@ object MonthlyReturnLoginRequest {
   ]
 }""".stripMargin
 
-  def authenticateISAManager: HttpRequestBuilder =
+  def getBearerToken: HttpRequestBuilder =
     http("Retrieve bearer token")
       .post(ggSignInUrl)
       .body(StringBody(authRequestPayload))
       .asJson
       .check(status.is(201))
-      .check(header("authorization").transform(_.replaceAll(".*,(Bearer\\s+\\S+)", "$1")).saveAs("bearerToken"))
+      .check(header(HttpHeaderNames.Authorization).saveAs("bearerToken"))
       .silent
 }
