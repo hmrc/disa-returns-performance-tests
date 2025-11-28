@@ -69,7 +69,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   setup(
     "monthly-returns-submission-journey",
     "Monthly returns submission journey"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
+  ) withActions (feed(
     generateReportInformationForTheSubmission()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
     getBearerToken,
@@ -79,7 +79,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   setup(
     "monthly-returns-declaration-journey",
     "Monthly returns declaration journey"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
+  ) withActions (feed(
     generateReportInformationForTheDeclaration()
   ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
     getBearerToken,
@@ -89,7 +89,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   setup(
     "monthly-reconciliation-report-summary-journey",
     "Monthly reconciliation report summary journey"
-  ) withActions (bearerTokenFeeder.actionBuilders ++ feed(
+  ) withActions (feed(
     generateReportInformationForTheSubmission()
   ).actionBuilders: _*) withRequests (
     getBearerToken,

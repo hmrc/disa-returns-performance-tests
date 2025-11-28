@@ -35,6 +35,5 @@ object AppConfig extends ServicesConfiguration {
   val subscriptionPath: String              = "/definition/context/disa-returns/version/1.0"
   val subscriptionFieldValuesPath: String   = "/field/application/clientId/context/disa-returns/version/1.0"
   val disaReturnsTestSupportBaseUrl: String = baseUrlFor("disa-returns-test-support-api")
-  val testSupportPath: String               = "/reconciliation"
   val reportingResultsSummaryPath: String   = "/results/summary"
 }

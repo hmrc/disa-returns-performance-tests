@@ -18,6 +18,7 @@ package uk.gov.hmrc.perftests.disareturns.testSetup
 
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.generateRandomISAReference
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.ggSignInUrl
 import uk.gov.hmrc.perftests.disareturns.models.{SetupAssertions, SetupFailure}
 
@@ -41,7 +42,7 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
       |      "key": "HMRC-DISA-ORG",
       |      "identifiers": [{
       |         "key":"ZREF",
-      |         "value":"Z5612"
+      |         "value":"isaReference"
       |      }],
       |      "state": "Activated"
       |    }
@@ -51,12 +52,12 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
   def getSubmissionBearerToken: Future[String] = {
     val url         = ggSignInUrl
     val bearerRegex = "Bearer\\s+\\S+".r
-
+    val payload     = authRequestPayload.replaceAll("isaReference", generateRandomISAReference(1, 500))
     ws.url(url)
       .addHttpHeaders(
         "Content-Type" -> "application/json"
       )
-      .post(authRequestPayload)
+      .post(payload)
       .map { response =>
         ensureSetup(
           response.status == 201,
