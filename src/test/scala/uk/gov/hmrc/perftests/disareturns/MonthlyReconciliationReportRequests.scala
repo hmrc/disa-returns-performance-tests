@@ -44,13 +44,6 @@ object MonthlyReconciliationReportRequests {
                    |    "failedEligibility": 3
                    |}""".stripMargin
 
-  val generateReconciliationReportScenario: HttpRequestBuilder =
-    http("Generate Reconciliation Report")
-      .post(s"$disaReturnsTestSupportBaseUrl/#{isaManagerReference}/2025-26/#{month}/$testSupportPath")
-      .headers(headerWithJsonContentType)
-      .body(StringBody(generateReconciliationReportPayload))
-      .check(status.is(204))
-
   val getReportingResultsSummary: HttpRequestBuilder =
     http("Get Reporting Results Summary")
       .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/2025-26/#{month}$reportingResultsSummaryPath")
