@@ -25,27 +25,31 @@ import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
 import scala.concurrent.{ExecutionContext, Future}
 
 trait BaseRequests {
-  implicit val system: ActorSystem = ActorSystem("setup-system")
-  implicit val mat: Materializer = Materializer(system)
-  implicit val ec: ExecutionContext = system.dispatcher
+  implicit val system: ActorSystem    = ActorSystem("setup-system")
+  implicit val mat: Materializer      = Materializer(system)
+  implicit val ec: ExecutionContext   = system.dispatcher
   val wsClient: StandaloneAhcWSClient = StandaloneAhcWSClient()
-  val authRequests = new AuthRequests(wsClient)
-  val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
-  val reportingWindowRequests = new ReportingWindowRequests(wsClient)
-  val noOfThirdPartyApplications = 10
+  val authRequests                    = new AuthRequests(wsClient)
+  val thirdPartyApplicationRequests   = new ThirdPartyApplicationRequests(wsClient)
+  val reportingWindowRequests         = new ReportingWindowRequests(wsClient)
+  val noOfThirdPartyApplications      = 10
 
   def testDataSetup(): Future[TestDataSetupResult] = {
     val setup = for {
       bearerToken <- authRequests.getSubmissionBearerToken
-      _ <- reportingWindowRequests.setReportingWindowsOpen()
-      apps <- Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
-        for {
-          app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
-          _ <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
-        } yield app
-      }
-      _ <- thirdPartyApplicationRequests.createSubscriptionFields()
-    } yield TestDataSetupResult(bearerToken = bearerToken, clientIds = apps.map(_.clientId), applicationIds = apps.map(_.applicationId))
+      _           <- reportingWindowRequests.setReportingWindowsOpen()
+      apps        <- Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
+                       for {
+                         app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
+                         _   <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
+                       } yield app
+                     }
+      _           <- thirdPartyApplicationRequests.createSubscriptionFields()
+    } yield TestDataSetupResult(
+      bearerToken = bearerToken,
+      clientIds = apps.map(_.clientId),
+      applicationIds = apps.map(_.applicationId)
+    )
     setup.recover { case e =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
