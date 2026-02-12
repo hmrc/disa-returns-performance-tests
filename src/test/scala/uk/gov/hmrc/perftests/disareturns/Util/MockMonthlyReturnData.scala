@@ -135,7 +135,9 @@ object MockMonthlyReturnData extends NdjsonSupport {
 
     val ndjsonString = toNdjson(allPayloads)
 
-    /** # Uncomment below code to save the ndjson fine in case for the testing purposes * */
+    /** Uncomment below code to save the ndjson fine in case for the testing purposes. 5832 * 4 creates a 10MB NDJson
+      * file, where 4 are the different types of subscription.
+      */
     /** val path = Paths.get("test-data.txt") Files.write(path, ndjsonString.getBytes(StandardCharsets.UTF_8))* */
     ndjsonString
   }
