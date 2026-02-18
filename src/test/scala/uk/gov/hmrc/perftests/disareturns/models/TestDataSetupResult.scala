@@ -17,7 +17,12 @@
 package uk.gov.hmrc.perftests.disareturns.models
 
 case class TestDataSetupResult(
+  isaManager: Seq[IsaManager]
+)
+
+case class IsaManager(
+  zRef: String,
   bearerToken: String,
-  clientIds: List[String],
-  applicationIds: List[String]
+  clientId: String,
+  applicationId: String
 )

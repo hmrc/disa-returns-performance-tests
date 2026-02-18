@@ -16,17 +16,20 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
-import io.gatling.core.Predef.feed
+import io.gatling.commons.validation.SuccessWrapper
+import io.gatling.core.Predef.exec
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
-import uk.gov.hmrc.perftests.disareturns.MonthlyReturnLoginRequest.getBearerToken
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReport
-import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
+import uk.gov.hmrc.perftests.disareturns.TestOnlyRequests.openObligationStatus
+import uk.gov.hmrc.perftests.disareturns.Util.DirectMemoryLogger
+import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{getMonth, getTaxYear}
 import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
+import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
@@ -36,63 +39,60 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
 
   before {
     setupData = Await.result(testDataSetup(), 30.seconds)
+
+    val scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+
+    scheduler.scheduleAtFixedRate(
+      new Runnable {
+        override def run(): Unit = DirectMemoryLogger.log()
+      },
+      0,
+      5,
+      java.util.concurrent.TimeUnit.SECONDS
+    )
   }
 
   after {
     testDataCleanUp(setupData)
   }
 
-  val bearerTokenFeeder: ChainBuilder = feed(Iterator.continually(Map("bearerToken" -> setupData.bearerToken)))
 
-  val clientIdFeeder: ChainBuilder = feed(
-    Iterator.continually(Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size))))
-  )
+  // Thread-safe counter for round-robin
+  val isaManagerCounter = new AtomicInteger(0)
 
-  def generateReportInformationForTheSubmission(): Iterator[Map[String, String]] =
-    Iterator.continually(
-      Map(
-        "isaManagerReference" -> generateRandomISAReference(1, 500),
-        "taxYear"             -> getTaxYear,
-        "month"               -> getMonth
-      )
-    )
+  val assignIsaManager: ChainBuilder = exec { session =>
+//    if (setupData.isaManager.isEmpty) {
+//      session.failure("No IsaManagers available in setupData")
+//    } else {
+      // Get next index in round-robin, safely
+      val index = isaManagerCounter.getAndUpdate(i => (i + 1) % setupData.isaManager.size)
+      val im    = setupData.isaManager(index)
 
-  def generateReportInformationForTheDeclaration(): Iterator[Map[String, String]] =
-    Iterator.continually(
-      Map(
-        "isaManagerReference" -> generateRandomISAReference(501, 999),
-        "taxYear"             -> getTaxYear,
-        "month"               -> getMonth
-      )
-    )
+      session
+        .set("isaManagerReference", im.zRef)
+        .set("bearerToken", im.bearerToken)
+        .set("clientId", im.clientId)
+        .set("applicationId", im.applicationId)
+        .success
+//    }
+  }
 
-  setup(
-    "monthly-returns-submission-journey",
-    "Monthly returns submission journey"
-  ) withActions (feed(
-    generateReportInformationForTheSubmission()
-  ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
-    getBearerToken,
-    submitMonthlyReport
-  )
+  val setDates: ChainBuilder = exec { session =>
+    session
+      .set("taxYear", getTaxYear)
+      .set("month", getMonth)
+      .success
+  }
 
   setup(
-    "monthly-returns-declaration-journey",
-    "Monthly returns declaration journey"
-  ) withActions (feed(
-    generateReportInformationForTheDeclaration()
-  ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
-    getBearerToken,
-    submitDeclaration
-  )
-
-  setup(
-    "monthly-reconciliation-report-summary-journey",
-    "Monthly reconciliation report summary journey"
-  ) withActions (feed(
-    generateReportInformationForTheSubmission()
-  ).actionBuilders: _*) withRequests (
-    getBearerToken,
+    "monthly-returns-journey",
+    "Monthly returns journey"
+  ).withActions(
+    assignIsaManager.actionBuilders ++ setDates.actionBuilders: _*
+  ).withRequests(
+    openObligationStatus,
+    submitMonthlyReport,
+    submitDeclaration,
     submitReturnSummaryCallback,
     getReportingResultsSummary
   )

@@ -19,30 +19,14 @@ package uk.gov.hmrc.perftests.disareturns
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
-import uk.gov.hmrc.perftests.disareturns.Util.NdjsonPayloadGenerator
-import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsHost, disaReturnsRoute}
+import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsStubHost, openObligationStatusPath}
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.headerWithClientIdAndBearerToken
 
-import java.nio.file.{Files, Paths, StandardOpenOption}
-
-object MonthlyReturnsSubmissionRequests {
-
-  private val submissionPayloadFilePath: String = {
-    val path = "target/monthly-return-payload.ndjson"
-    val ndjson = NdjsonPayloadGenerator.generateNdjsonPayload()
-    val filePath = Paths.get(path)
-    Files.write(filePath, ndjson.getBytes("UTF-8"),
-      StandardOpenOption.CREATE,
-      StandardOpenOption.TRUNCATE_EXISTING
-    )
-    path
-  }
-
-  val submitMonthlyReport: HttpRequestBuilder =
-    http("Submit monthly report")
-      .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}")
+object TestOnlyRequests {
+  val openObligationStatus: HttpRequestBuilder =
+    http("Open Obligation Status")
+      .post(s"$disaReturnsStubHost$openObligationStatusPath#{isaManagerReference}")
       .headers(headerWithClientIdAndBearerToken)
-      .body(RawFileBody(submissionPayloadFilePath)).asJson
-      .check(status.is(204))
-
+      .body(StringBody(""))
+      .check(status.is(200))
 }

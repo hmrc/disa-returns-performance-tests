@@ -20,36 +20,53 @@ import akka.actor.ActorSystem
 import akka.stream.Materializer
 import org.scalatest.Assertions.cancel
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
-import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
+import uk.gov.hmrc.perftests.disareturns.models.{IsaManager, TestDataSetupResult}
 
 import scala.concurrent.{ExecutionContext, Future}
 
 trait BaseRequests {
-  implicit val system: ActorSystem    = ActorSystem("setup-system")
-  implicit val mat: Materializer      = Materializer(system)
-  implicit val ec: ExecutionContext   = system.dispatcher
+  implicit val system: ActorSystem = ActorSystem("setup-system")
+  implicit val mat: Materializer = Materializer(system)
+  implicit val ec: ExecutionContext = system.dispatcher
   val wsClient: StandaloneAhcWSClient = StandaloneAhcWSClient()
-  val authRequests                    = new AuthRequests(wsClient)
-  val thirdPartyApplicationRequests   = new ThirdPartyApplicationRequests(wsClient)
-  val reportingWindowRequests         = new ReportingWindowRequests(wsClient)
-  val noOfThirdPartyApplications      = 10
+  val authRequests = new AuthRequests(wsClient)
+  val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
+  val stubTestOnlyRequests = new StubTestOnlyRequests(wsClient)
+  val noOfThirdPartyApplications = 10
 
   def testDataSetup(): Future[TestDataSetupResult] = {
+
+    val zRefs: List[String] =
+      (0 until noOfThirdPartyApplications)
+        .map(i => {
+          require(i < 10000, "Exceeded max ZRef limit (Z9999)")
+          f"Z$i%04d"
+        })
+        .toList
+
     val setup = for {
-      bearerToken <- authRequests.getSubmissionBearerToken
-      _           <- reportingWindowRequests.setReportingWindowsOpen()
-      apps        <- Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
-                       for {
-                         app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
-                         _   <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
-                       } yield app
-                     }
-      _           <- thirdPartyApplicationRequests.createSubscriptionFields()
-    } yield TestDataSetupResult(
-      bearerToken = bearerToken,
-      clientIds = apps.map(_.clientId),
-      applicationIds = apps.map(_.applicationId)
-    )
+      _ <- stubTestOnlyRequests.setReportingWindowsOpen()
+
+      isaManagers <- Future.traverse(zRefs) { zRef =>
+        for {
+          bearerToken <- authRequests.getSubmissionBearerToken(zRef)
+
+          app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
+
+          _ <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
+
+        } yield IsaManager(
+          zRef = zRef,
+          bearerToken = bearerToken,
+          clientId = app.clientId,
+          applicationId = app.applicationId
+        )
+      }
+
+      _ <- thirdPartyApplicationRequests.createSubscriptionFields()
+
+    } yield TestDataSetupResult(isaManager = isaManagers)
+
     setup.recover { case e =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
@@ -57,12 +74,16 @@ trait BaseRequests {
 
   def testDataCleanUp(setupData: TestDataSetupResult): Future[Unit] =
     Future
-      .traverse(setupData.applicationIds)(appId =>
-        thirdPartyApplicationRequests.deleteClientApplication(setupData.bearerToken, appId)
-      )
+      .traverse(setupData.isaManager) { im =>
+        thirdPartyApplicationRequests.deleteClientApplication(
+          im.bearerToken,
+          im.applicationId
+        )
+      }
       .map(_ => ())
       .andThen { case _ =>
         wsClient.close()
         system.terminate()
       }
+
 }

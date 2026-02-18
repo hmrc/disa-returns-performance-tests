@@ -1,3 +1,7 @@
+import sbt.Keys.javaOptions
+
+import scala.collection.Seq
+
 lazy val root = (project in file("."))
   .enablePlugins(GatlingPlugin)
   .settings(
@@ -6,5 +10,6 @@ lazy val root = (project in file("."))
     scalaVersion := "2.13.16",
     scalacOptions ++= Seq("-feature", "-language:implicitConversions", "-language:postfixOps"),
     Test / testOptions := Seq.empty,
-    libraryDependencies ++= Dependencies.test
+    libraryDependencies ++= Dependencies.test,
+    javaOptions ++= Seq("-Xms1024m", "-Xmx1024m")
   )
