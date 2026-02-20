@@ -17,7 +17,7 @@
 package uk.gov.hmrc.perftests.disareturns
 
 import io.gatling.commons.validation.SuccessWrapper
-import io.gatling.core.Predef.exec
+import io.gatling.core.Predef.{exec, feed}
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
@@ -57,11 +57,9 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   }
 
 
-  val isaManagerCounter = new AtomicInteger(0)
-
-  val assignIsaManager: ChainBuilder = exec { session =>
-    val index = isaManagerCounter.getAndUpdate(i => (i + 1) % setupData.isaManager.size)
-    val im = setupData.isaManager(index)
+  val assignIsaManagerChain: ChainBuilder = exec { session =>
+    val userIndex = session.userId.toInt % setupData.isaManager.size
+    val im        = setupData.isaManager(userIndex)
 
     session
       .set("isaManagerReference", im.zRef)
@@ -71,7 +69,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
       .success
   }
 
-  val setDates: ChainBuilder = exec { session =>
+  val setDatesChain: ChainBuilder       = exec { session =>
     session
       .set("taxYear", getTaxYear)
       .set("month", getMonth)
@@ -82,7 +80,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     "monthly-returns-journey",
     "Monthly returns journey"
   ).withActions(
-    assignIsaManager.actionBuilders ++ setDates.actionBuilders: _*
+    assignIsaManagerChain.actionBuilders ++ setDatesChain.actionBuilders: _*
   ).withRequests(
     openObligationStatus,
     submitMonthlyReport,
@@ -90,6 +88,9 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     submitReturnSummaryCallback,
     getReportingResultsSummary
   )
+
+  //TODO: Raising ticket to implement get report endpoint request
+  //TODO: Improvement - implement call to test support API to create report
 
   runSimulation()
 }
