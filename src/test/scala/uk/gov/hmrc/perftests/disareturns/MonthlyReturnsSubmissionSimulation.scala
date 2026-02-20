@@ -29,7 +29,6 @@ import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{getMonth, get
 import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
@@ -56,31 +55,26 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     testDataCleanUp(setupData)
   }
 
+  val isaManagerFeeder: Iterator[Map[String, Any]] = Iterator.continually(
+    setupData.isaManager.map { im =>
+      Map(
+        "isaManagerReference" -> im.zRef,
+        "bearerToken"         -> im.bearerToken,
+        "clientId"            -> im.clientId,
+        "applicationId"       -> im.applicationId,
+        "taxYear"             -> getTaxYear,
+        "month"               -> getMonth
+      )
+    }
+  ).flatten
 
-  val assignIsaManagerChain: ChainBuilder = exec { session =>
-    val userIndex = session.userId.toInt % setupData.isaManager.size
-    val im        = setupData.isaManager(userIndex)
-
-    session
-      .set("isaManagerReference", im.zRef)
-      .set("bearerToken", im.bearerToken)
-      .set("clientId", im.clientId)
-      .set("applicationId", im.applicationId)
-      .success
-  }
-
-  val setDatesChain: ChainBuilder       = exec { session =>
-    session
-      .set("taxYear", getTaxYear)
-      .set("month", getMonth)
-      .success
-  }
+  val assignIsaManager: ChainBuilder = feed(isaManagerFeeder)
 
   setup(
     "monthly-returns-journey",
     "Monthly returns journey"
   ).withActions(
-    assignIsaManagerChain.actionBuilders ++ setDatesChain.actionBuilders: _*
+    assignIsaManager.actionBuilders: _*
   ).withRequests(
     openObligationStatus,
     submitMonthlyReport,
