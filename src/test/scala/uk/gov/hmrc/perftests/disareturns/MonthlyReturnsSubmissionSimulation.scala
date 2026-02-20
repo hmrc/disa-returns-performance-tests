@@ -55,26 +55,28 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     testDataCleanUp(setupData)
   }
 
-  val isaManagerFeeder: Iterator[Map[String, Any]] = Iterator.continually(
-    setupData.isaManager.map { im =>
-      Map(
-        "isaManagerReference" -> im.zRef,
-        "bearerToken"         -> im.bearerToken,
-        "clientId"            -> im.clientId,
-        "applicationId"       -> im.applicationId,
-        "taxYear"             -> getTaxYear,
-        "month"               -> getMonth
-      )
-    }
-  ).flatten
-
-  val assignIsaManager: ChainBuilder = feed(isaManagerFeeder)
+  val isaManagerFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually(setupData.isaManager)
+        .flatten
+        .map { im =>
+          Map(
+            "isaManagerReference" -> im.zRef,
+            "bearerToken"         -> im.bearerToken,
+            "clientId"            -> im.clientId,
+            "applicationId"       -> im.applicationId,
+            "taxYear"             -> getTaxYear,
+            "month"               -> getMonth
+          )
+        }
+    )
 
   setup(
     "monthly-returns-journey",
     "Monthly returns journey"
   ).withActions(
-    assignIsaManager.actionBuilders: _*
+    isaManagerFeeder.actionBuilders: _*
   ).withRequests(
     openObligationStatus,
     submitMonthlyReport,
