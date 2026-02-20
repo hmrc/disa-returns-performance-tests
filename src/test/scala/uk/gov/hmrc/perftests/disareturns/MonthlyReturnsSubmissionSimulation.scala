@@ -57,24 +57,18 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   }
 
 
-  // Thread-safe counter for round-robin
   val isaManagerCounter = new AtomicInteger(0)
 
   val assignIsaManager: ChainBuilder = exec { session =>
-//    if (setupData.isaManager.isEmpty) {
-//      session.failure("No IsaManagers available in setupData")
-//    } else {
-      // Get next index in round-robin, safely
-      val index = isaManagerCounter.getAndUpdate(i => (i + 1) % setupData.isaManager.size)
-      val im    = setupData.isaManager(index)
+    val index = isaManagerCounter.getAndUpdate(i => (i + 1) % setupData.isaManager.size)
+    val im = setupData.isaManager(index)
 
-      session
-        .set("isaManagerReference", im.zRef)
-        .set("bearerToken", im.bearerToken)
-        .set("clientId", im.clientId)
-        .set("applicationId", im.applicationId)
-        .success
-//    }
+    session
+      .set("isaManagerReference", im.zRef)
+      .set("bearerToken", im.bearerToken)
+      .set("clientId", im.clientId)
+      .set("applicationId", im.applicationId)
+      .success
   }
 
   val setDates: ChainBuilder = exec { session =>
