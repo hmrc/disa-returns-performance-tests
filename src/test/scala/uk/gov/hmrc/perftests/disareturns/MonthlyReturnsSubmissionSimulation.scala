@@ -17,7 +17,6 @@
 package uk.gov.hmrc.perftests.disareturns
 
 import io.gatling.core.Predef._
-import io.gatling.core.feeder.Feeder
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
@@ -26,19 +25,20 @@ import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submit
 import uk.gov.hmrc.perftests.disareturns.TestOnlyRequests.openObligationStatus
 import uk.gov.hmrc.perftests.disareturns.Util.DirectMemoryLogger
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{getMonth, getTaxYear}
-import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
+import uk.gov.hmrc.perftests.disareturns.models.{Applications, IsaManagers}
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
-  var setupData: TestDataSetupResult = _
+  var setupIsaManagers: IsaManagers = _
+  var setupIsaApplications: Applications = _
 
   before {
-    setupData = Await.result(testDataSetup(), 30.seconds)
+    setupIsaManagers = Await.result(setupTestData(), 30.seconds)
+    setupIsaApplications = Await.result(setupApplications(), 30.seconds)
 
     val scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
 
@@ -53,44 +53,44 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   }
 
   after {
-    testDataCleanUp(setupData)
+    testDataCleanUp(setupIsaApplications)
   }
+
+
+  val appFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually(setupIsaApplications.applications)
+        .flatten
+        .map { im =>
+          Map(
+            "clientId"            -> im.clientId,
+            "applicationId"       -> im.applicationId)
+        }
+    )
 
   val isaManagerFeeder: ChainBuilder =
     feed(
       Iterator
-        .continually(setupData.isaManager)
+        .continually(setupIsaManagers.isaManager)
         .flatten
         .map { im =>
           Map(
             "isaManagerReference" -> im.zRef,
             "bearerToken"         -> im.bearerToken,
-            "clientId"            -> im.clientId,
-            "applicationId"       -> im.applicationId,
             "taxYear"             -> getTaxYear,
             "month"               -> getMonth
           )
         }
     )
 
-  val isaManagerFeeder2: ChainBuilder =
-    exec { session =>
-      val im = setupData.isaManager(session.userId.toInt % setupData.isaManager.size)
 
-      session
-        .set("isaManagerReference", im.zRef)
-        .set("bearerToken", im.bearerToken)
-        .set("clientId", im.clientId)
-        .set("applicationId", im.applicationId)
-        .set("taxYear", getTaxYear)
-        .set("month", getMonth)
-    }
 
   setup(
     "monthly-returns-journey",
     "Monthly returns journey"
   ).withActions(
-    isaManagerFeeder2.actionBuilders: _*
+    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
   ).withRequests(
     openObligationStatus,
     submitMonthlyReport,
