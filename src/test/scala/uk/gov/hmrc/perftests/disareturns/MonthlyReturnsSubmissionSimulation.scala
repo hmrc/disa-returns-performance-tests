@@ -16,8 +16,7 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
-import io.gatling.commons.validation.SuccessWrapper
-import io.gatling.core.Predef.{exec, feed}
+import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
@@ -29,6 +28,7 @@ import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{getMonth, get
 import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
+import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
@@ -55,28 +55,30 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     testDataCleanUp(setupData)
   }
 
-  val isaManagerFeeder: ChainBuilder =
-    feed(
-      Iterator
-        .continually(setupData.isaManager)
-        .flatten
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken,
-            "clientId"            -> im.clientId,
-            "applicationId"       -> im.applicationId,
-            "taxYear"             -> getTaxYear,
-            "month"               -> getMonth
-          )
-        }
-    )
+  val isaManagerCounter = new AtomicInteger(0)
+
+  val assignIsaManager: ChainBuilder = exec { session =>
+    val index = isaManagerCounter.getAndUpdate(i => (i + 1) % setupData.isaManager.size)
+    val im = setupData.isaManager(index)
+
+    session
+      .set("isaManagerReference", im.zRef)
+      .set("bearerToken", im.bearerToken)
+      .set("clientId", im.clientId)
+      .set("applicationId", im.applicationId)
+  }
+
+  val setDatesChain: ChainBuilder = exec { session =>
+    session
+      .set("taxYear", getTaxYear)
+      .set("month", getMonth)
+  }
 
   setup(
     "monthly-returns-journey",
     "Monthly returns journey"
   ).withActions(
-    isaManagerFeeder.actionBuilders: _*
+    assignIsaManager.actionBuilders ++ setDatesChain.actionBuilders: _*
   ).withRequests(
     openObligationStatus,
     submitMonthlyReport,
