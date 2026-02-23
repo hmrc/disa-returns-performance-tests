@@ -1,5 +1,3 @@
-import sbt.Keys.javaOptions
-
 import scala.collection.Seq
 
 lazy val root = (project in file("."))
