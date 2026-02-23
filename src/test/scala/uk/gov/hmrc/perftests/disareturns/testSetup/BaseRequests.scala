@@ -20,49 +20,83 @@ import akka.actor.ActorSystem
 import akka.stream.Materializer
 import org.scalatest.Assertions.cancel
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
-import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
+import uk.gov.hmrc.perftests.disareturns.models.{Application, Applications, IsaManager, IsaManagers}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
 
 trait BaseRequests {
-  implicit val system: ActorSystem    = ActorSystem("setup-system")
-  implicit val mat: Materializer      = Materializer(system)
-  implicit val ec: ExecutionContext   = system.dispatcher
+  implicit val system: ActorSystem = ActorSystem("setup-system")
+  implicit val mat: Materializer = Materializer(system)
+  implicit val ec: ExecutionContext = system.dispatcher
   val wsClient: StandaloneAhcWSClient = StandaloneAhcWSClient()
-  val authRequests                    = new AuthRequests(wsClient)
-  val thirdPartyApplicationRequests   = new ThirdPartyApplicationRequests(wsClient)
-  val reportingWindowRequests         = new ReportingWindowRequests(wsClient)
-  val noOfThirdPartyApplications      = 10
+  val authRequests = new AuthRequests(wsClient)
+  val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
+  val stubTestOnlyRequests = new ReportingWindowRequest(wsClient)
+  val noOfThirdPartyApplications = 10
+  val noOfZReferences = 100
 
-  def testDataSetup(): Future[TestDataSetupResult] = {
+  def setupTestData(): Future[IsaManagers] = {
+
+    val zRefs: List[String] =
+      (0 until noOfZReferences)
+        .map(i => {
+          require(i < 10000, "Exceeded max ZRef limit (Z9999)")
+          f"Z$i%04d"
+        })
+        .toList
+
     val setup = for {
-      bearerToken <- authRequests.getSubmissionBearerToken
-      _           <- reportingWindowRequests.setReportingWindowsOpen()
-      apps        <- Future.traverse((1 to noOfThirdPartyApplications).toList) { _ =>
-                       for {
-                         app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
-                         _   <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
-                       } yield app
-                     }
-      _           <- thirdPartyApplicationRequests.createSubscriptionFields()
-    } yield TestDataSetupResult(
-      bearerToken = bearerToken,
-      clientIds = apps.map(_.clientId),
-      applicationIds = apps.map(_.applicationId)
-    )
+      _ <- stubTestOnlyRequests.setReportingWindowsOpen()
+
+      isaManagers <- Future.traverse(zRefs) { zRef =>
+        for {
+          bearerToken <- authRequests.getSubmissionBearerToken(zRef)
+        } yield IsaManager(
+          zRef = zRef,
+          bearerToken = bearerToken
+        )
+      }
+    } yield IsaManagers(isaManager = isaManagers)
+
     setup.recover { case e =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
   }
 
-  def testDataCleanUp(setupData: TestDataSetupResult): Future[Unit] =
-    Future
-      .traverse(setupData.applicationIds)(appId =>
-        thirdPartyApplicationRequests.deleteClientApplication(setupData.bearerToken, appId)
+  def setupApplications(): Future[Applications] = {
+
+    val setupFutures: Seq[Future[Application]] = (1 to noOfThirdPartyApplications).map { _ =>
+      for {
+        bearerToken <- authRequests.getSubmissionBearerToken("Z1234")
+        app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
+        _ <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
+        _ <- thirdPartyApplicationRequests.createSubscriptionFields()
+      } yield Application(
+        bearer = bearerToken,
+        clientId = app.clientId,
+        applicationId = app.applicationId
       )
-      .map(_ => ())
-      .andThen { case _ =>
-        wsClient.close()
-        system.terminate()
-      }
+    }
+
+    Future.sequence(setupFutures).map(Applications.apply).recover { case NonFatal(e) =>
+      cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
+    }
+  }
+
+  def testDataCleanUp(applications: Applications): Future[Unit] = {
+
+    val cleanupFutures: Seq[Future[Unit]] = applications.applications.map { app =>
+      thirdPartyApplicationRequests
+        .deleteClientApplication(app.bearer, app.applicationId)
+        .recover { case NonFatal(e) =>
+          println(s"Warning: failed to delete application ${app.applicationId}: ${e.getMessage}")
+          ()
+        }
+    }
+    Future.sequence(cleanupFutures).map(_ => ()).andThen { case _ =>
+      wsClient.close()
+      system.terminate()
+    }
+  }
 }

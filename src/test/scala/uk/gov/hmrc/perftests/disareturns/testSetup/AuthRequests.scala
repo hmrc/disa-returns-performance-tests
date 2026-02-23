@@ -18,7 +18,6 @@ package uk.gov.hmrc.perftests.disareturns.testSetup
 
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
-import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.generateRandomISAReference
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.ggSignInUrl
 import uk.gov.hmrc.perftests.disareturns.models.{SetupAssertions, SetupFailure}
 
@@ -49,10 +48,10 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
       |  ]
       |}""".stripMargin
 
-  def getSubmissionBearerToken: Future[String] = {
+  def getSubmissionBearerToken(zRef: String): Future[String] = {
     val url         = ggSignInUrl
     val bearerRegex = "Bearer\\s+\\S+".r
-    val payload     = authRequestPayload.replaceAll("isaReference", generateRandomISAReference(1, 500))
+    val payload     = authRequestPayload.replaceAll("isaReference", zRef)
     ws.url(url)
       .addHttpHeaders(
         "Content-Type" -> "application/json"

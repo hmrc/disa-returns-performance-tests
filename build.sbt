@@ -1,3 +1,5 @@
+import scala.collection.Seq
+
 lazy val root = (project in file("."))
   .enablePlugins(GatlingPlugin)
   .settings(

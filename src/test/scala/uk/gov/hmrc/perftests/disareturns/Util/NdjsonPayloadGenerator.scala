@@ -16,13 +16,16 @@
 
 package uk.gov.hmrc.perftests.disareturns.Util
 
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import play.api.libs.json.{JsValue, Json}
 import uk.gov.hmrc.perftests.disareturns.models.isaAccounts.{LifetimeISASubscriptionPayload, LiftimeISAClosurePayload, StandardISAClosurePayload, StandardISASubscriptionPayload}
 
-object MockMonthlyReturnData extends NdjsonSupport {
-  private val config         = ConfigFactory.load()
-  private val noOfJsons: Int = config.getInt("saveMonthlyReturnLocally.no-of-json-lines")
+import java.nio.file.{Files, Paths, StandardOpenOption}
+
+object NdjsonPayloadGenerator extends NdjsonSupport {
+  private val config: Config           = ConfigFactory.load()
+  private val numOfIsaAccountSets: Int = config.getInt("monthlyReturnsTestPayload.numOfIsaAccountSets")
+
   def getLISASubscriptionPayload(
     nino: String,
     accountNumber: String
@@ -107,39 +110,30 @@ object MockMonthlyReturnData extends NdjsonSupport {
     "VOID"
   )
 
-  def validNdjsonTestData(): String = {
+  private val isaAccountBuilders: Seq[(String, String) => JsValue] = Seq(
+    (nino, acc) => Json.toJson(getLISASubscriptionPayload(nino, acc)),
+    (nino, acc) => Json.toJson(getLISAClosurePayload(nino, acc)),
+    (nino, acc) => Json.toJson(getSISASubscriptionPayload(nino, acc)),
+    (nino, acc) => Json.toJson(getSISAClosurePayload(nino, acc))
+  )
 
-    def generatePayloadBlock(): Seq[JsValue] = {
-      val lisaSubscriptionPayload =
-        getLISASubscriptionPayload(RandomDataGenerator.generateNino(), RandomDataGenerator.generateAccountNumber())
-
-      val lisaClosurePayload =
-        getLISAClosurePayload(RandomDataGenerator.generateNino(), RandomDataGenerator.generateAccountNumber())
-
-      val sisaSubscriptionPayload =
-        getSISASubscriptionPayload(RandomDataGenerator.generateNino(), RandomDataGenerator.generateAccountNumber())
-
-      val sisaClosurePayload =
-        getSISAClosurePayload(RandomDataGenerator.generateNino(), RandomDataGenerator.generateAccountNumber())
-
-      Seq(
-        Json.toJson(lisaSubscriptionPayload),
-        Json.toJson(lisaClosurePayload),
-        Json.toJson(sisaSubscriptionPayload),
-        Json.toJson(sisaClosurePayload)
-      )
+  private def generateEachIsaAccountType(): Seq[JsValue] =
+    isaAccountBuilders.map { build =>
+      val nino    = RandomDataGenerator.generateNino()
+      val account = RandomDataGenerator.generateAccountNumber()
+      build(nino, account)
     }
 
-    val allPayloads: Seq[JsValue] =
-      Seq.fill(noOfJsons)(generatePayloadBlock()).flatten
+  def generateNdjsonPayload(): String = {
+    val allEvents: Seq[JsValue] = Seq.fill(numOfIsaAccountSets)(generateEachIsaAccountType()).flatten
+    toNdjson(allEvents)
+  }
 
-    val ndjsonString = toNdjson(allPayloads)
-
-    /** Uncomment below code to save the ndjson fine in case for the testing purposes. 5832 * 4 creates a 10MB NDJson
-      * file, where 4 are the different types of subscription.
-      */
-    /** val path = Paths.get("test-data.txt") Files.write(path, ndjsonString.getBytes(StandardCharsets.UTF_8))* */
-    ndjsonString
+  def generateNdjsonFile(filePath: String): String = {
+    val ndjson = generateNdjsonPayload()
+    val path   = Paths.get(filePath)
+    Files.write(path, ndjson.getBytes("UTF-8"), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+    filePath
   }
 
 }

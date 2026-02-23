@@ -16,15 +16,16 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
-import io.gatling.core.Predef.feed
+import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
-import uk.gov.hmrc.perftests.disareturns.MonthlyReturnLoginRequest.getBearerToken
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReport
-import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{generateRandomISAReference, getMonth, getTaxYear}
-import uk.gov.hmrc.perftests.disareturns.models.TestDataSetupResult
+import uk.gov.hmrc.perftests.disareturns.TestOnlyRequests.openObligationStatus
+import uk.gov.hmrc.perftests.disareturns.Util.DirectMemoryLogger
+import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{getMonth, getTaxYear}
+import uk.gov.hmrc.perftests.disareturns.models.{Applications, IsaManagers}
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
 import scala.concurrent.Await
@@ -32,70 +33,91 @@ import scala.concurrent.duration.DurationInt
 
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
-  var setupData: TestDataSetupResult = _
+  var setupIsaManagers: IsaManagers = _
+  var setupIsaApplications: Applications = _
 
   before {
-    setupData = Await.result(testDataSetup(), 30.seconds)
+    setupIsaManagers = Await.result(setupTestData(), 30.seconds)
+    setupIsaApplications = Await.result(setupApplications(), 30.seconds)
+
+    val scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+
+    scheduler.scheduleAtFixedRate(
+      new Runnable {
+        override def run(): Unit = DirectMemoryLogger.log()
+      },
+      0,
+      5,
+      java.util.concurrent.TimeUnit.SECONDS
+    )
   }
 
   after {
-    testDataCleanUp(setupData)
+    testDataCleanUp(setupIsaApplications)
   }
 
-  val bearerTokenFeeder: ChainBuilder = feed(Iterator.continually(Map("bearerToken" -> setupData.bearerToken)))
 
-  val clientIdFeeder: ChainBuilder = feed(
-    Iterator.continually(Map("clientId" -> setupData.clientIds(scala.util.Random.nextInt(setupData.clientIds.size))))
-  )
-
-  def generateReportInformationForTheSubmission(): Iterator[Map[String, String]] =
-    Iterator.continually(
-      Map(
-        "isaManagerReference" -> generateRandomISAReference(1, 500),
-        "taxYear"             -> getTaxYear,
-        "month"               -> getMonth
-      )
+  val appFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually(setupIsaApplications.applications)
+        .flatten
+        .map { im =>
+          Map(
+            "clientId"            -> im.clientId,
+            "applicationId"       -> im.applicationId)
+        }
     )
 
-  def generateReportInformationForTheDeclaration(): Iterator[Map[String, String]] =
-    Iterator.continually(
-      Map(
-        "isaManagerReference" -> generateRandomISAReference(501, 999),
-        "taxYear"             -> getTaxYear,
-        "month"               -> getMonth
-      )
+  val isaManagerFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually(setupIsaManagers.isaManager)
+        .flatten
+        .map { im =>
+          Map(
+            "isaManagerReference" -> im.zRef,
+            "bearerToken"         -> im.bearerToken,
+            "taxYear"             -> getTaxYear,
+            "month"               -> getMonth
+          )
+        }
     )
 
   setup(
-    "monthly-returns-submission-journey",
-    "Monthly returns submission journey"
-  ) withActions (feed(
-    generateReportInformationForTheSubmission()
-  ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
-    getBearerToken,
-    submitMonthlyReport
-  )
-
-  setup(
-    "monthly-returns-declaration-journey",
-    "Monthly returns declaration journey"
-  ) withActions (feed(
-    generateReportInformationForTheDeclaration()
-  ).actionBuilders ++ clientIdFeeder.actionBuilders: _*) withRequests (
-    getBearerToken,
+    "submit-monthly-returns",
+    "Submit Monthly Returns"
+  ).withActions(
+    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+  ).withRequests(
+    openObligationStatus,
+    submitMonthlyReport,
     submitDeclaration
   )
 
   setup(
-    "monthly-reconciliation-report-summary-journey",
-    "Monthly reconciliation report summary journey"
-  ) withActions (feed(
-    generateReportInformationForTheSubmission()
-  ).actionBuilders: _*) withRequests (
-    getBearerToken,
+    "nps-report-summary-callback",
+    "NPS Report Summary Callback"
+  ).withActions(
+    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+  ).withRequests(
+    submitReturnSummaryCallback
+  )
+
+  //TODO: Ticket raised - DFI-1720
+  // - to implement request to test support API to setup reconciliation report
+  // - to implement request to get reconciliation report
+  // - remove NPS callback as this is tested separately
+  setup(
+    "nps-retrieve-monthly-summary-and-report",
+    "NPS Retrieve Monthly Summary and Report"
+  ).withActions(
+    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+  ).withRequests(
     submitReturnSummaryCallback,
     getReportingResultsSummary
   )
+
 
   runSimulation()
 }
