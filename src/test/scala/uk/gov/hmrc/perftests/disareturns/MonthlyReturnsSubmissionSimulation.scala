@@ -84,23 +84,40 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
         }
     )
 
-
-
   setup(
-    "monthly-returns-journey",
-    "Monthly returns journey"
+    "submit-monthly-returns",
+    "Submit Monthly Returns"
   ).withActions(
     isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
   ).withRequests(
     openObligationStatus,
     submitMonthlyReport,
-    submitDeclaration,
+    submitDeclaration
+  )
+
+  setup(
+    "nps-report-summary-callback",
+    "NPS Report Summary Callback"
+  ).withActions(
+    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+  ).withRequests(
+    submitReturnSummaryCallback
+  )
+
+  //TODO: Ticket raised -
+  //TODO: to implement request to test support API to setup reconciliation report
+  //TODO: and to implement request to get reconciliation report
+  //TODO: remove NPS callback as this is tested separately
+  setup(
+    "nps-retrieve-monthly-summary-and-report",
+    "NPS Retrieve Monthly Summary and Report"
+  ).withActions(
+    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+  ).withRequests(
     submitReturnSummaryCallback,
     getReportingResultsSummary
   )
 
-  //TODO: Raising ticket to implement get report endpoint request
-  //TODO: Improvement - implement call to test support API to create report
 
   runSimulation()
 }
