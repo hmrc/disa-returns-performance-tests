@@ -104,10 +104,10 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     submitReturnSummaryCallback
   )
 
-  //TODO: Ticket raised -
-  //TODO: to implement request to test support API to setup reconciliation report
-  //TODO: and to implement request to get reconciliation report
-  //TODO: remove NPS callback as this is tested separately
+  //TODO: Ticket raised - DFI-1720
+  // - to implement request to test support API to setup reconciliation report
+  // - to implement request to get reconciliation report
+  // - remove NPS callback as this is tested separately
   setup(
     "nps-retrieve-monthly-summary-and-report",
     "NPS Retrieve Monthly Summary and Report"

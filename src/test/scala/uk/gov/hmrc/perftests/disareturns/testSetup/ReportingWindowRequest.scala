@@ -27,7 +27,7 @@ import javax.inject.Singleton
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class StubTestOnlyRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
+class ReportingWindowRequest(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
   val reportingWindowPayload: JsObject = Json.obj("reportingWindowOpen" -> true)
 
   def setReportingWindowsOpen(): Future[Unit] =

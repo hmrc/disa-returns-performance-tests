@@ -32,7 +32,7 @@ trait BaseRequests {
   val wsClient: StandaloneAhcWSClient = StandaloneAhcWSClient()
   val authRequests = new AuthRequests(wsClient)
   val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
-  val stubTestOnlyRequests = new StubTestOnlyRequests(wsClient)
+  val stubTestOnlyRequests = new ReportingWindowRequest(wsClient)
   val noOfThirdPartyApplications = 10
   val noOfZReferences = 100
 
