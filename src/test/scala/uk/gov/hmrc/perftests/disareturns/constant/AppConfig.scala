@@ -37,4 +37,17 @@ object AppConfig extends ServicesConfiguration {
   val subscriptionFieldValuesPath: String   = "/field/application/clientId/context/disa-returns/version/1.0"
   val disaReturnsTestSupportBaseUrl: String = baseUrlFor("disa-returns-test-support-api")
   val reportingResultsSummaryPath: String   = "/results/summary"
+  val reconciliationReportPath: String      = "/results"
+  val disaReturnsSubmissionHost: String              = baseUrlFor("disa-returns-submission")
+  val submissionClockPath: String                    = "/disa-returns-submission/test-only/clock/"
+  val submissionMonthlyReturnsResetPath: String       = "/disa-returns-submission/test-only/monthly-returns"
+
+  // Test data is submitted for month AUG, tax year 2026-27; disa-returns-submission's clock must be
+  // pinned to a date within that same month/tax year (and inside declarationPeriodStart/End, currently
+  // 6-19) for MonthlyReturnService.isWithinDeclarationPeriod to accept declarations.
+  val submissionMonth: String        = "AUG"
+  val submissionTaxYear: String      = "2026-27"
+  val submissionClockDate: String    = "2026-08-17"
+
+  val perfTestCredIdPrefix: String = "disa-returns-perf-test"
 }

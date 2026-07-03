@@ -34,7 +34,7 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
       |    "providerType": "GovernmentGateway"
       |  },
       |  "affinityGroup": "Organisation",
-      |  "credId": "1234567890",
+      |  "credId": "credIdPlaceholder",
       |  "credentialStrength": "strong",
       |  "enrolments": [
       |    {
@@ -48,10 +48,12 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
       |  ]
       |}""".stripMargin
 
-  def getSubmissionBearerToken(zRef: String): Future[String] = {
+  def getSubmissionBearerToken(zRef: String, credId: String = java.util.UUID.randomUUID().toString): Future[String] = {
     val url         = ggSignInUrl
     val bearerRegex = "Bearer\\s+\\S+".r
-    val payload     = authRequestPayload.replaceAll("isaReference", zRef)
+    val payload     = authRequestPayload
+      .replaceAll("isaReference", zRef)
+      .replaceAll("credIdPlaceholder", credId)
     ws.url(url)
       .addHttpHeaders(
         "Content-Type" -> "application/json"

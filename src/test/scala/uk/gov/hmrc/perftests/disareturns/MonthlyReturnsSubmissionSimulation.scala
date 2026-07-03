@@ -19,12 +19,12 @@ package uk.gov.hmrc.perftests.disareturns
 import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
-import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReportingResultsSummary, submitReturnSummaryCallback}
+import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReconciliationReport, getReportingResultsSummary, submitReturnSummaryCallback}
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
-import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReport
-import uk.gov.hmrc.perftests.disareturns.TestOnlyRequests.openObligationStatus
+import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReturn
 import uk.gov.hmrc.perftests.disareturns.Util.DirectMemoryLogger
 import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{getMonth, getTaxYear}
+import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{submissionMonth, submissionTaxYear}
 import uk.gov.hmrc.perftests.disareturns.models.{Applications, IsaManagers}
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
 
@@ -35,10 +35,14 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
 
   var setupIsaManagers: IsaManagers = _
   var setupIsaApplications: Applications = _
+  var setupReconciliationReportIsaManagers: IsaManagers = _
+  var setupSubmissionOnlyIsaManagers: IsaManagers = _
 
   before {
-    setupIsaManagers = Await.result(setupTestData(), 30.seconds)
-    setupIsaApplications = Await.result(setupApplications(), 30.seconds)
+    setupIsaManagers = Await.result(setupTestData(), 3.minutes)
+    setupIsaApplications = Await.result(setupApplications(), 1.minute)
+    setupReconciliationReportIsaManagers = Await.result(setupReconciliationReportZReferences(), 1.minute)
+    setupSubmissionOnlyIsaManagers = Await.result(setupSubmissionOnlyZReferences(), 1.minute)
 
     val scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
 
@@ -78,39 +82,87 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
           Map(
             "isaManagerReference" -> im.zRef,
             "bearerToken"         -> im.bearerToken,
+            "taxYear"             -> submissionTaxYear,
+            "month"               -> submissionMonth
+          )
+        }
+    )
+
+  val declarationFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually(setupIsaManagers.isaManager)
+        .flatten
+        .take(noOfDeclarationZReferences)
+        .map { im =>
+          Map(
+            "isaManagerReference" -> im.zRef,
+            "bearerToken"         -> im.bearerToken,
+            "taxYear"             -> submissionTaxYear,
+            "month"               -> submissionMonth
+          )
+        }
+    )
+
+  val submissionOnlyFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually(setupSubmissionOnlyIsaManagers.isaManager)
+        .flatten
+        .map { im =>
+          Map(
+            "isaManagerReference" -> im.zRef,
+            "bearerToken"         -> im.bearerToken,
+            "taxYear"             -> submissionTaxYear,
+            "month"               -> submissionMonth
+          )
+        }
+    )
+
+  val reconciliationReportZRefFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually(setupReconciliationReportIsaManagers.isaManager)
+        .flatten
+        .map { im =>
+          Map(
+            "isaManagerReference" -> im.zRef,
+            "bearerToken"         -> im.bearerToken,
             "taxYear"             -> getTaxYear,
             "month"               -> getMonth
           )
         }
     )
 
+  val reconciliationReportPageFeeder: ChainBuilder =
+    feed(
+      Iterator
+        .continually((0 until 100).map(page => Map("page" -> page.toString)))
+        .flatten
+    )
+
   setup(
-    "submit-monthly-returns",
-    "Submit Monthly Returns"
+    "post-submit-monthly-returns",
+    "POST Submit Monthly Return"
   ).withActions(
-    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+    submissionOnlyFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
   ).withRequests(
-    openObligationStatus,
-    submitMonthlyReport,
+    submitMonthlyReturn
+  )
+
+  setup(
+    "post-declare-monthly-returns",
+    "POST Declare Monthly Return"
+  ).withActions(
+    declarationFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+  ).withRequests(
+    submitMonthlyReturn,
     submitDeclaration
   )
 
   setup(
-    "nps-report-summary-callback",
-    "NPS Report Summary Callback"
-  ).withActions(
-    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
-  ).withRequests(
-    submitReturnSummaryCallback
-  )
-
-  //TODO: Ticket raised - DFI-1720
-  // - to implement request to test support API to setup reconciliation report
-  // - to implement request to get reconciliation report
-  // - remove NPS callback as this is tested separately
-  setup(
-    "nps-retrieve-monthly-summary-and-report",
-    "NPS Retrieve Monthly Summary and Report"
+    "get-report-summary-callback-and-summary",
+    "GET Report Summary Callback & Summary"
   ).withActions(
     isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
   ).withRequests(
@@ -118,6 +170,14 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     getReportingResultsSummary
   )
 
+  setup(
+    "get-reconciliation-report",
+    "Get Reconciliation Report"
+  ).withActions(
+    reconciliationReportZRefFeeder.actionBuilders ++ reconciliationReportPageFeeder.actionBuilders: _*
+  ).withRequests(
+    getReconciliationReport
+  )
 
   runSimulation()
 }

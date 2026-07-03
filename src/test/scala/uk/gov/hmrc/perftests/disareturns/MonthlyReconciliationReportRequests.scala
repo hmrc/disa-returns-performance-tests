@@ -31,22 +31,21 @@ object MonthlyReconciliationReportRequests {
                    |""".stripMargin
 
   val submitReturnSummaryCallback: HttpRequestBuilder =
-    http("Submit Return summary callback")
+    http("POST Reconciliation report summary callback")
       .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}/2025-26/#{month}")
       .headers(headerWithJsonContentType)
       .body(StringBody(npsCallbackPayload))
       .check(status.is(204))
 
-  val generateReconciliationReportPayload: String = s"""
-         {
-                   |    "oversubscribed": 1,
-                   |    "traceAndMatch": 2,
-                   |    "failedEligibility": 3
-                   |}""".stripMargin
-
   val getReportingResultsSummary: HttpRequestBuilder =
-    http("Get Reporting Results Summary")
+    http("GET Reconciliation report summary")
       .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/2025-26/#{month}$reportingResultsSummaryPath")
+      .headers(headerOnlyWithBearerToken)
+      .check(status.is(200))
+
+  val getReconciliationReport: HttpRequestBuilder =
+    http("GET Reconciliation report")
+      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}$reconciliationReportPath?page=#{page}")
       .headers(headerOnlyWithBearerToken)
       .check(status.is(200))
 }

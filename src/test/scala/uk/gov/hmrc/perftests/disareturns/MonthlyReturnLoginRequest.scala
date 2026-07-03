@@ -29,7 +29,7 @@ object MonthlyReturnLoginRequest {
     "providerType": "GovernmentGateway"
   },
   "affinityGroup": "Organisation",
-  "credId": "1234567890",
+  "credId": "#{credId}",
   "credentialStrength": "strong",
   "enrolments": [
     {
@@ -44,7 +44,7 @@ object MonthlyReturnLoginRequest {
 }""".stripMargin
 
   def getBearerToken: HttpRequestBuilder =
-    http("Retrieve bearer token")
+    http("POST Generate bearer token")
       .post(ggSignInUrl)
       .body(StringBody(authRequestPayload))
       .asJson

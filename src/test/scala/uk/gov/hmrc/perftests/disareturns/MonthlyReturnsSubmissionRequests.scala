@@ -38,8 +38,8 @@ object MonthlyReturnsSubmissionRequests {
     path
   }
 
-  val submitMonthlyReport: HttpRequestBuilder =
-    http("Submit monthly report")
+  val submitMonthlyReturn: HttpRequestBuilder =
+    http("POST Submit monthly return")
       .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}")
       .headers(headerWithClientIdAndBearerToken)
       .body(RawFileBody(submissionPayloadFilePath)).asJson
