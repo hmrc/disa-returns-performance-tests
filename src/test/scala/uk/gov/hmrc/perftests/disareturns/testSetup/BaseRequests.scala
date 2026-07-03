@@ -39,15 +39,8 @@ trait BaseRequests {
   val submissionTestOnlyRequests = new SubmissionTestOnlyRequests(wsClient)
 
   val noOfThirdPartyApplications = 10
-
-  // Declaring is a once-only action per (zRef, taxYear, month), and there are ~480 live ISA managers, so
-  // this pool is used once each (no cycling) by the bounded post-declare-monthly-returns journey.
   val noOfDeclarationZReferences = 500
-
-  // Unrelated to the declare-once constraint above (the stub's canned reconciliation report doesn't care
-  // how many times a zRef is reused), so this stays small to keep setup fast.
   val noOfReconciliationReportZReferences = 100
-
   val noOfSubmissionOnlyZReferences = 10
 
   private val authSetupParallelism = 10
