@@ -19,14 +19,18 @@ package uk.gov.hmrc.perftests.disareturns
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
+import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submissionPayloadFilePath
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsHost, disaReturnsRoute}
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.headerWithClientIdAndBearerToken
 
 object MonthlyReturnsDeclarationRequest {
 
+  val declarationPayload: String = s"""{"nilReturn": false}""".stripMargin
+
   val submitDeclaration: HttpRequestBuilder =
-    http("Submit declaration request")
+    http("POST Declaration")
       .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}/declaration")
       .headers(headerWithClientIdAndBearerToken)
+      .body(StringBody(declarationPayload))
       .check(status.is(200))
 }

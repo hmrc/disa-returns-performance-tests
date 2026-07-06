@@ -18,11 +18,14 @@ package uk.gov.hmrc.perftests.disareturns.testSetup
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
+import akka.stream.scaladsl.{Sink, Source}
 import org.scalatest.Assertions.cancel
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{perfTestCredIdPrefix, submissionClockDate}
 import uk.gov.hmrc.perftests.disareturns.models.{Application, Applications, IsaManager, IsaManagers}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 trait BaseRequests {
@@ -33,23 +36,38 @@ trait BaseRequests {
   val authRequests = new AuthRequests(wsClient)
   val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
   val stubTestOnlyRequests = new ReportingWindowRequest(wsClient)
+  val submissionTestOnlyRequests = new SubmissionTestOnlyRequests(wsClient)
+
   val noOfThirdPartyApplications = 10
-  val noOfZReferences = 100
+  val noOfDeclarationZReferences = 500
+  val noOfReconciliationReportZReferences = 100
+  val noOfSubmissionOnlyZReferences = 10
+
+  private val authSetupParallelism = 10
+  private val authSetupRateLimit = 5
+
+  private def zRefPool(count: Int): List[String] =
+    (0 until count)
+      .map(i => {
+        require(i < 10000, "Exceeded max ZRef limit (Z9999)")
+        f"Z$i%04d"
+      })
+      .toList
+
+  private def withBoundedConcurrency[A, B](items: Seq[A])(f: A => Future[B]): Future[Seq[B]] =
+    Source(items.toList)
+      .throttle(authSetupRateLimit, 1.second)
+      .mapAsync(authSetupParallelism)(f)
+      .runWith(Sink.seq)
 
   def setupTestData(): Future[IsaManagers] = {
-
-    val zRefs: List[String] =
-      (0 until noOfZReferences)
-        .map(i => {
-          require(i < 10000, "Exceeded max ZRef limit (Z9999)")
-          f"Z$i%04d"
-        })
-        .toList
+    val zRefs: List[String] = zRefPool(noOfDeclarationZReferences)
 
     val setup = for {
       _ <- stubTestOnlyRequests.setReportingWindowsOpen()
-
-      isaManagers <- Future.traverse(zRefs) { zRef =>
+      _ <- submissionTestOnlyRequests.setClock(submissionClockDate)
+      _ <- submissionTestOnlyRequests.resetMonthlyReturns()
+      isaManagers <- withBoundedConcurrency(zRefs) { zRef =>
         for {
           bearerToken <- authRequests.getSubmissionBearerToken(zRef)
         } yield IsaManager(
@@ -64,9 +82,42 @@ trait BaseRequests {
     }
   }
 
+  def setupSubmissionOnlyZReferences(): Future[IsaManagers] = {
+    val zRefs: List[String] = zRefPool(noOfSubmissionOnlyZReferences)
+
+    val setup = withBoundedConcurrency(zRefs) { zRef =>
+      for {
+        bearerToken <- authRequests.getSubmissionBearerToken(zRef)
+      } yield IsaManager(
+        zRef = zRef,
+        bearerToken = bearerToken
+      )
+    }.map(IsaManagers.apply)
+
+    setup.recover { case e =>
+      cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
+    }
+  }
+
+  def setupReconciliationReportZReferences(): Future[IsaManagers] = {
+    val zRefs: List[String] = zRefPool(noOfReconciliationReportZReferences)
+    val setup = withBoundedConcurrency(zRefs) { zRef =>
+      for {
+        bearerToken <- authRequests.getSubmissionBearerToken(zRef, s"$perfTestCredIdPrefix-$zRef")
+      } yield IsaManager(
+        zRef = zRef,
+        bearerToken = bearerToken
+      )
+    }.map(IsaManagers.apply)
+
+    setup.recover { case e =>
+      cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
+    }
+  }
+
   def setupApplications(): Future[Applications] = {
 
-    val setupFutures: Seq[Future[Application]] = (1 to noOfThirdPartyApplications).map { _ =>
+    val setup = withBoundedConcurrency(1 to noOfThirdPartyApplications) { _ =>
       for {
         bearerToken <- authRequests.getSubmissionBearerToken("Z1234")
         app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
@@ -79,7 +130,7 @@ trait BaseRequests {
       )
     }
 
-    Future.sequence(setupFutures).map(Applications.apply).recover { case NonFatal(e) =>
+    setup.map(Applications.apply).recover { case NonFatal(e) =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
   }
