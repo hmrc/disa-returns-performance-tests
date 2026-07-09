@@ -42,7 +42,7 @@ object AppConfig extends ServicesConfiguration {
   val submissionClockPath: String                    = "/disa-returns-submission/test-only/clock/"
   val submissionMonthlyReturnsResetPath: String       = "/disa-returns-submission/test-only/monthly-returns"
 
-  val submissionMonth: String        = "AUG"
+  val submissionMonth: String        = "JUL"
   val submissionTaxYear: String      = "2026-27"
   val submissionClockDate: String    = "2026-08-17"
 
