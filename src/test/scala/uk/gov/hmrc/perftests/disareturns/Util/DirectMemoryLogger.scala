@@ -27,9 +27,9 @@ object DirectMemoryLogger {
 
     bufferPools.foreach { pool =>
       if (pool.getName == "direct") {
-        val usedMb  = pool.getMemoryUsed / 1024 / 1024
-        val capMb   = pool.getTotalCapacity / 1024 / 1024
-        val count   = pool.getCount
+        val usedMb = pool.getMemoryUsed / 1024 / 1024
+        val capMb  = pool.getTotalCapacity / 1024 / 1024
+        val count  = pool.getCount
 
         println(
           s"[DIRECT MEMORY] Used: ${usedMb}MB | Capacity: ${capMb}MB | Buffers: $count"

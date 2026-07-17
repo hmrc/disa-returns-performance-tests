@@ -22,11 +22,9 @@ case class IsaManagers(
 
 case class IsaManager(
   zRef: String,
-  bearerToken: String,
+  bearerToken: String
 )
 
 case class Applications(applications: Seq[Application])
 
-case class Application(bearer: String,
-                         clientId: String,
-                         applicationId: String)
+case class Application(bearer: String, clientId: String, applicationId: String)

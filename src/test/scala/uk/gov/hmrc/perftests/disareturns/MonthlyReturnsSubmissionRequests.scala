@@ -28,13 +28,10 @@ import java.nio.file.{Files, Paths, StandardOpenOption}
 object MonthlyReturnsSubmissionRequests {
 
   private val submissionPayloadFilePath: String = {
-    val path = "target/monthly-return-payload.ndjson"
-    val ndjson = NdjsonPayloadGenerator.generateNdjsonPayload()
+    val path     = "target/monthly-return-payload.ndjson"
+    val ndjson   = NdjsonPayloadGenerator.generateNdjsonPayload()
     val filePath = Paths.get(path)
-    Files.write(filePath, ndjson.getBytes("UTF-8"),
-      StandardOpenOption.CREATE,
-      StandardOpenOption.TRUNCATE_EXISTING
-    )
+    Files.write(filePath, ndjson.getBytes("UTF-8"), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
     path
   }
 
@@ -42,7 +39,8 @@ object MonthlyReturnsSubmissionRequests {
     http("POST Submit monthly return")
       .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}")
       .headers(headerWithClientIdAndBearerToken)
-      .body(RawFileBody(submissionPayloadFilePath)).asJson
+      .body(RawFileBody(submissionPayloadFilePath))
+      .asJson
       .check(status.is(204))
 
 }

@@ -33,10 +33,10 @@ import scala.concurrent.duration.DurationInt
 
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
-  var setupIsaManagers: IsaManagers = _
-  var setupIsaApplications: Applications = _
+  var setupIsaManagers: IsaManagers                     = _
+  var setupIsaApplications: Applications                = _
   var setupReconciliationReportIsaManagers: IsaManagers = _
-  var setupSubmissionOnlyIsaManagers: IsaManagers = _
+  var setupSubmissionOnlyIsaManagers: IsaManagers       = _
 
   before {
     setupIsaManagers = Await.result(setupTestData(), 3.minutes)
@@ -60,16 +60,13 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     testDataCleanUp(setupIsaApplications)
   }
 
-
   val appFeeder: ChainBuilder =
     feed(
       Iterator
         .continually(setupIsaApplications.applications)
         .flatten
         .map { im =>
-          Map(
-            "clientId"            -> im.clientId,
-            "applicationId"       -> im.applicationId)
+          Map("clientId" -> im.clientId, "applicationId" -> im.applicationId)
         }
     )
 
