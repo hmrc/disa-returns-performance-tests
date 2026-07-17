@@ -29,30 +29,28 @@ import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 trait BaseRequests {
-  implicit val system: ActorSystem = ActorSystem("setup-system")
-  implicit val mat: Materializer = Materializer(system)
-  implicit val ec: ExecutionContext = system.dispatcher
+  implicit val system: ActorSystem    = ActorSystem("setup-system")
+  implicit val mat: Materializer      = Materializer(system)
+  implicit val ec: ExecutionContext   = system.dispatcher
   val wsClient: StandaloneAhcWSClient = StandaloneAhcWSClient()
-  val authRequests = new AuthRequests(wsClient)
-  val thirdPartyApplicationRequests = new ThirdPartyApplicationRequests(wsClient)
-  val stubTestOnlyRequests = new ReportingWindowRequest(wsClient)
-  val submissionTestOnlyRequests = new SubmissionTestOnlyRequests(wsClient)
+  val authRequests                    = new AuthRequests(wsClient)
+  val thirdPartyApplicationRequests   = new ThirdPartyApplicationRequests(wsClient)
+  val stubTestOnlyRequests            = new ReportingWindowRequest(wsClient)
+  val submissionTestOnlyRequests      = new SubmissionTestOnlyRequests(wsClient)
 
-  val noOfThirdPartyApplications = 10
-  val noOfDeclarationZReferences = 500
+  val noOfThirdPartyApplications          = 10
+  val noOfDeclarationZReferences          = 500
   val noOfReconciliationReportZReferences = 100
-  val noOfSubmissionOnlyZReferences = 10
+  val noOfSubmissionOnlyZReferences       = 10
 
   private val authSetupParallelism = 10
-  private val authSetupRateLimit = 5
+  private val authSetupRateLimit   = 5
 
   private def zRefPool(count: Int): List[String] =
-    (0 until count)
-      .map(i => {
-        require(i < 10000, "Exceeded max ZRef limit (Z9999)")
-        f"Z$i%04d"
-      })
-      .toList
+    (0 until count).map { i =>
+      require(i < 10000, "Exceeded max ZRef limit (Z9999)")
+      f"Z$i%04d"
+    }.toList
 
   private def withBoundedConcurrency[A, B](items: Seq[A])(f: A => Future[B]): Future[Seq[B]] =
     Source(items.toList)
@@ -64,17 +62,17 @@ trait BaseRequests {
     val zRefs: List[String] = zRefPool(noOfDeclarationZReferences)
 
     val setup = for {
-      _ <- stubTestOnlyRequests.setReportingWindowsOpen()
-      _ <- submissionTestOnlyRequests.setClock(submissionClockDate)
-      _ <- submissionTestOnlyRequests.resetMonthlyReturns()
+      _           <- stubTestOnlyRequests.setReportingWindowsOpen()
+      _           <- submissionTestOnlyRequests.setClock(submissionClockDate)
+      _           <- submissionTestOnlyRequests.resetMonthlyReturns()
       isaManagers <- withBoundedConcurrency(zRefs) { zRef =>
-        for {
-          bearerToken <- authRequests.getSubmissionBearerToken(zRef)
-        } yield IsaManager(
-          zRef = zRef,
-          bearerToken = bearerToken
-        )
-      }
+                       for {
+                         bearerToken <- authRequests.getSubmissionBearerToken(zRef)
+                       } yield IsaManager(
+                         zRef = zRef,
+                         bearerToken = bearerToken
+                       )
+                     }
     } yield IsaManagers(isaManager = isaManagers)
 
     setup.recover { case e =>
@@ -101,7 +99,7 @@ trait BaseRequests {
 
   def setupReconciliationReportZReferences(): Future[IsaManagers] = {
     val zRefs: List[String] = zRefPool(noOfReconciliationReportZReferences)
-    val setup = withBoundedConcurrency(zRefs) { zRef =>
+    val setup               = withBoundedConcurrency(zRefs) { zRef =>
       for {
         bearerToken <- authRequests.getSubmissionBearerToken(zRef, s"$perfTestCredIdPrefix-$zRef")
       } yield IsaManager(
@@ -120,9 +118,9 @@ trait BaseRequests {
     val setup = withBoundedConcurrency(1 to noOfThirdPartyApplications) { _ =>
       for {
         bearerToken <- authRequests.getSubmissionBearerToken("Z1234")
-        app <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
-        _ <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
-        _ <- thirdPartyApplicationRequests.createSubscriptionFields()
+        app         <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
+        _           <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
+        _           <- thirdPartyApplicationRequests.createSubscriptionFields()
       } yield Application(
         bearer = bearerToken,
         clientId = app.clientId,

@@ -45,7 +45,9 @@ object MonthlyReconciliationReportRequests {
 
   val getReconciliationReport: HttpRequestBuilder =
     http("GET Reconciliation report")
-      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}$reconciliationReportPath?page=#{page}")
+      .get(
+        s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}$reconciliationReportPath?page=#{page}"
+      )
       .headers(headerOnlyWithBearerToken)
       .check(status.is(200))
 }
