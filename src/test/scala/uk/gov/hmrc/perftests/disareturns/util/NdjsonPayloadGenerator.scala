@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns.Util
+package uk.gov.hmrc.perftests.disareturns.util
 
 import com.typesafe.config.{Config, ConfigFactory}
 import play.api.libs.json.{JsValue, Json}

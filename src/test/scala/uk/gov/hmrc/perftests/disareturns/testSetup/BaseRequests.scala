@@ -21,14 +21,17 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Sink, Source}
 import org.scalatest.Assertions.cancel
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
+import uk.gov.hmrc.performance.conf.PerftestConfiguration
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{perfTestCredIdPrefix, submissionClockDate}
 import uk.gov.hmrc.perftests.disareturns.models.{Application, Applications, IsaManager, IsaManagers}
 
+import java.time.{LocalDate, ZoneOffset}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.collection.concurrent.TrieMap
 import scala.util.control.NonFatal
 
-trait BaseRequests {
+trait BaseRequests { self: PerftestConfiguration =>
   implicit val system: ActorSystem    = ActorSystem("setup-system")
   implicit val mat: Materializer      = Materializer(system)
   implicit val ec: ExecutionContext   = system.dispatcher
@@ -36,18 +39,26 @@ trait BaseRequests {
   val authRequests                    = new AuthRequests(wsClient)
   val thirdPartyApplicationRequests   = new ThirdPartyApplicationRequests(wsClient)
   val stubTestOnlyRequests            = new ReportingWindowRequest(wsClient)
+  val disaReturnsTestOnlyRequests     = new DisaReturnsTestOnlyRequests(wsClient)
   val submissionTestOnlyRequests      = new SubmissionTestOnlyRequests(wsClient)
 
-  val noOfThirdPartyApplications          = 10
-  val noOfDeclarationZReferences          = 500
-  val noOfReconciliationReportZReferences = 100
-  val noOfSubmissionOnlyZReferences       = 10
+  val noOfThirdPartyApplications          = if (runSingleUserJourney) 1 else 10
+  val noOfDeclarationZReferences          = if (runSingleUserJourney) 1 else 500
+  val noOfReconciliationReportZReferences = if (runSingleUserJourney) 1 else 100
+  val noOfSubmissionOnlyZReferences       = if (runSingleUserJourney) 1 else 10
+
+  private val declarationZReferenceStart          = 0
+  private val submissionOnlyZReferenceStart       = declarationZReferenceStart + noOfDeclarationZReferences
+  private val reconciliationReportZReferenceStart = submissionOnlyZReferenceStart + noOfSubmissionOnlyZReferences
 
   private val authSetupParallelism = 10
   private val authSetupRateLimit   = 5
+  private val createdApplications  = TrieMap.empty[String, Application]
+  private val preparedZReferences  = TrieMap.empty[String, Unit]
+  private val summaryZReferences   = TrieMap.empty[String, Unit]
 
-  private def zRefPool(count: Int): List[String] =
-    (0 until count).map { i =>
+  private def zRefPool(start: Int, count: Int): List[String] =
+    (start until start + count).map { i =>
       require(i < 10000, "Exceeded max ZRef limit (Z9999)")
       f"Z$i%04d"
     }.toList
@@ -59,14 +70,16 @@ trait BaseRequests {
       .runWith(Sink.seq)
 
   def setupTestData(): Future[IsaManagers] = {
-    val zRefs: List[String] = zRefPool(noOfDeclarationZReferences)
+    val zRefs: List[String] = zRefPool(declarationZReferenceStart, noOfDeclarationZReferences)
+    zRefs.foreach(summaryZReferences.put(_, ()))
 
     val setup = for {
       _           <- stubTestOnlyRequests.setReportingWindowsOpen()
-      _           <- submissionTestOnlyRequests.setClock(submissionClockDate)
-      _           <- submissionTestOnlyRequests.resetMonthlyReturns()
+      _           <- submissionTestOnlyRequests.deleteMonthlyReturns(zRefs)
+      _           <- disaReturnsTestOnlyRequests.deleteMonthlyReturnSummaries(zRefs)
       isaManagers <- withBoundedConcurrency(zRefs) { zRef =>
                        for {
+                         _           <- prepareSubmissionZReference(zRef)
                          bearerToken <- authRequests.getSubmissionBearerToken(zRef)
                        } yield IsaManager(
                          zRef = zRef,
@@ -81,16 +94,20 @@ trait BaseRequests {
   }
 
   def setupSubmissionOnlyZReferences(): Future[IsaManagers] = {
-    val zRefs: List[String] = zRefPool(noOfSubmissionOnlyZReferences)
+    val zRefs: List[String] = zRefPool(submissionOnlyZReferenceStart, noOfSubmissionOnlyZReferences)
 
-    val setup = withBoundedConcurrency(zRefs) { zRef =>
-      for {
-        bearerToken <- authRequests.getSubmissionBearerToken(zRef)
-      } yield IsaManager(
-        zRef = zRef,
-        bearerToken = bearerToken
-      )
-    }.map(IsaManagers.apply)
+    val setup = for {
+      _           <- submissionTestOnlyRequests.deleteMonthlyReturns(zRefs)
+      isaManagers <- withBoundedConcurrency(zRefs) { zRef =>
+                       for {
+                         _           <- prepareSubmissionZReference(zRef)
+                         bearerToken <- authRequests.getSubmissionBearerToken(zRef)
+                       } yield IsaManager(
+                         zRef = zRef,
+                         bearerToken = bearerToken
+                       )
+                     }
+    } yield IsaManagers(isaManagers)
 
     setup.recover { case e =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
@@ -98,9 +115,11 @@ trait BaseRequests {
   }
 
   def setupReconciliationReportZReferences(): Future[IsaManagers] = {
-    val zRefs: List[String] = zRefPool(noOfReconciliationReportZReferences)
+    val zRefs: List[String] =
+      zRefPool(reconciliationReportZReferenceStart, noOfReconciliationReportZReferences)
     val setup               = withBoundedConcurrency(zRefs) { zRef =>
       for {
+        _           <- prepareSubmissionZReference(zRef)
         bearerToken <- authRequests.getSubmissionBearerToken(zRef, s"$perfTestCredIdPrefix-$zRef")
       } yield IsaManager(
         zRef = zRef,
@@ -115,27 +134,47 @@ trait BaseRequests {
 
   def setupApplications(): Future[Applications] = {
 
-    val setup = withBoundedConcurrency(1 to noOfThirdPartyApplications) { _ =>
-      for {
-        bearerToken <- authRequests.getSubmissionBearerToken("Z1234")
-        app         <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
-        _           <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
-        _           <- thirdPartyApplicationRequests.createSubscriptionFields()
-      } yield Application(
-        bearer = bearerToken,
-        clientId = app.clientId,
-        applicationId = app.applicationId
-      )
-    }
+    val setup = for {
+      _            <- thirdPartyApplicationRequests.createSubscriptionFields()
+      applications <- withBoundedConcurrency(1 to noOfThirdPartyApplications) { _ =>
+                        for {
+                          bearerToken <- authRequests.getSubmissionBearerToken("Z1234")
+                          app         <- thirdPartyApplicationRequests.createClientApplication(bearerToken)
+                          application  = Application(
+                                           bearer = bearerToken,
+                                           clientId = app.clientId,
+                                           applicationId = app.applicationId
+                                         )
+                          _            = createdApplications.put(application.applicationId, application)
+                          _           <- thirdPartyApplicationRequests.createNotificationBox(app.clientId)
+                        } yield application
+                      }
+    } yield applications
 
     setup.map(Applications.apply).recover { case NonFatal(e) =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
   }
 
-  def testDataCleanUp(applications: Applications): Future[Unit] = {
+  private def prepareSubmissionZReference(zReference: String): Future[Unit] = {
+    val date      = LocalDate.parse(submissionClockDate)
+    val startDate = date.atStartOfDay(ZoneOffset.UTC).toInstant.toString
+    val endDate   = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant.minusNanos(1).toString
 
-    val cleanupFutures: Seq[Future[Unit]] = applications.applications.map { app =>
+    preparedZReferences.put(zReference, ())
+    for {
+      _ <- submissionTestOnlyRequests.deleteOverrides(zReference)
+      _ <- submissionTestOnlyRequests.setReportingWindowOverride(zReference, startDate, endDate)
+    } yield ()
+  }
+
+  def testDataCleanUp(applications: Option[Applications], submissionZReferences: Seq[String]): Future[Unit] = {
+
+    val applicationsToDelete =
+      (applications.toSeq
+        .flatMap(_.applications) ++ createdApplications.values).groupBy(_.applicationId).values.map(_.head)
+
+    val applicationCleanup: Seq[Future[Unit]] = applicationsToDelete.toSeq.map { app =>
       thirdPartyApplicationRequests
         .deleteClientApplication(app.bearer, app.applicationId)
         .recover { case NonFatal(e) =>
@@ -143,9 +182,40 @@ trait BaseRequests {
           ()
         }
     }
-    Future.sequence(cleanupFutures).map(_ => ()).andThen { case _ =>
-      wsClient.close()
-      system.terminate()
-    }
+
+    val zReferencesToDelete  = submissionZReferences.distinct
+    val monthlyReturnCleanup =
+      if (zReferencesToDelete.nonEmpty) {
+        submissionTestOnlyRequests.deleteMonthlyReturns(zReferencesToDelete).recover { case NonFatal(e) =>
+          println(s"Warning: failed to clean submission monthly returns: ${e.getMessage}")
+          ()
+        }
+      } else Future.unit
+    val summaryCleanup       =
+      if (summaryZReferences.nonEmpty) {
+        disaReturnsTestOnlyRequests.deleteMonthlyReturnSummaries(summaryZReferences.keys.toSeq).recover {
+          case NonFatal(e) =>
+            println(s"Warning: failed to clean disa-returns monthly return summaries: ${e.getMessage}")
+            ()
+        }
+      } else Future.unit
+    val overrideCleanup      =
+      if (preparedZReferences.nonEmpty) {
+        withBoundedConcurrency(preparedZReferences.keys.toSeq) { zReference =>
+          submissionTestOnlyRequests.deleteOverrides(zReference).recover { case NonFatal(e) =>
+            println(s"Warning: failed to clean submission overrides for $zReference: ${e.getMessage}")
+            ()
+          }
+        }.map(_ => ())
+      } else Future.unit
+    val submissionCleanup    = Future.sequence(Seq(monthlyReturnCleanup, summaryCleanup, overrideCleanup)).map(_ => ())
+
+    Future
+      .sequence(applicationCleanup :+ submissionCleanup.map(_ => ()))
+      .map(_ => ())
+      .andThen { case _ =>
+        wsClient.close()
+        system.terminate()
+      }
   }
 }
