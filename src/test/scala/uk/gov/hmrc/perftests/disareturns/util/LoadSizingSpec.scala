@@ -68,8 +68,8 @@ class LoadSizingSpec extends AnyWordSpec with Matchers {
       val allocated = allocate(declarationCount = 1501, sharedPoolSize = 1000)
       val all       = allocated.declaration ++ allocated.shared
 
-      all.toSet should contain noElementsOf ReservedReferences
-      all.distinct should have size all.size
+      all.toSet                                                       should contain noElementsOf ReservedReferences
+      all.distinct                                                    should have size all.size
       allocated.declaration.toSet.intersect(allocated.shared.toSet) shouldBe empty
     }
 
@@ -82,14 +82,14 @@ class LoadSizingSpec extends AnyWordSpec with Matchers {
       val allocated = allocate(declarationCount = 1, sharedPoolSize = 1)
 
       allocated.declaration shouldBe Vector("Z0000")
-      allocated.shared shouldBe Vector("Z0001")
+      allocated.shared      shouldBe Vector("Z0001")
     }
 
     "support runs without the declaration journey" in {
       val allocated = allocate(declarationCount = 0, sharedPoolSize = 2)
 
       allocated.declaration shouldBe empty
-      allocated.shared shouldBe Vector("Z0000", "Z0001")
+      allocated.shared      shouldBe Vector("Z0000", "Z0001")
     }
   }
 

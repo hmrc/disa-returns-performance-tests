@@ -24,7 +24,7 @@ object LoadSizing {
 
   val ReservedReferences: Set[String] = Set("Z1400", "Z1500", "Z1503")
 
-  private val NoLoad = 0.0001d
+  private val NoLoad    = 0.0001d
   private val Namespace = (0 until 10000).map(value => f"Z$value%04d").filterNot(ReservedReferences).toVector
 
   def declarationUserCount(
@@ -41,7 +41,7 @@ object LoadSizing {
       require(loadFactor >= 0, "loadFactor must not be negative")
 
       val configuredRate = journeyLoad * loadFactor
-      val rate =
+      val rate           =
         if ((constantRateTime.toSeconds * configuredRate).toInt < 1)
           1d / (constantRateTime.toSeconds - 1)
         else configuredRate
