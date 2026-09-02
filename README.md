@@ -103,7 +103,9 @@ Tax year and month are derived from the aggregate override rather than URL segme
 ### Bash Scripts
 
 - `./smoke-run-tests.sh` runs every journey locally with one user per journey.
-- `./local-run-tests.sh` runs the full local performance test using the configured journey loads.
+- `./local-run-tests.sh` runs the full local performance test using the configured journey loads and a compact valid
+  four-line NDJSON body. This keeps request-rate validation meaningful without sending about 28 GB through a single
+  local service stack. Jenkins and direct `sbt` runs retain the configured 16,000-line body.
 
 Both scripts run `sbt scalafmtCheckAll scalafmtSbtCheck` before Gatling.
 They stop immediately if formatting or Gatling fails.
@@ -125,7 +127,7 @@ sbt -Dperftest.runSmokeTest=true -DrunLocal=true gatling:test
 Run full performance test (locally) as follows:
 
 ```bash
-sbt -DrunLocal=true gatling:test
+./local-run-tests.sh
 ```
 
 Run the supported Jenkins profiles with active 1/8/1-minute phases as follows, substituting `200`, `500`, or `1000`:

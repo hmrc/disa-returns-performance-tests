@@ -3,4 +3,7 @@ set -euo pipefail
 
 sbt scalafmtCheckAll scalafmtSbtCheck
 
-sbt -DrunLocal=true gatling:test
+sbt \
+  -DrunLocal=true \
+  -DmonthlyReturnsTestPayload.numOfIsaAccountSets=1 \
+  gatling:test
