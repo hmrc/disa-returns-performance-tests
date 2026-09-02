@@ -16,37 +16,65 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
+import com.typesafe.config.ConfigFactory
 import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests._
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest._
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests._
-import uk.gov.hmrc.perftests.disareturns.util.DirectMemoryLogger
 import uk.gov.hmrc.perftests.disareturns.models.{Applications, IsaManagers}
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
+import uk.gov.hmrc.perftests.disareturns.util.{DirectMemoryLogger, LoadSizing}
 
 import java.util.concurrent._
 import scala.concurrent.Await
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
-  var setupIsaManagers: IsaManagers                     = _
-  var setupIsaApplications: Applications                = _
-  var setupReconciliationReportIsaManagers: IsaManagers = _
-  var setupSubmissionOnlyIsaManagers: IsaManagers       = _
-  var memoryLoggerScheduler: ScheduledExecutorService   = _
+  var setupIsaManagers: IsaManagers                   = _
+  var setupIsaApplications: Applications              = _
+  var setupSharedIsaManagers: IsaManagers             = _
+  var memoryLoggerScheduler: ScheduledExecutorService = _
+
+  private val noOfDeclarationZReferences = definitions(labels)
+    .find(_.id == "post-declare-monthly-returns")
+    .map { declarationJourney =>
+      LoadSizing.declarationUserCount(
+        smoke = runSingleUserJourney,
+        journeyLoad = declarationJourney.load,
+        loadFactor = loadFactor,
+        rampUpTime = rampUpTime,
+        constantRateTime = constantRateTime,
+        rampDownTime = rampDownTime
+      )
+    }
+    .getOrElse(0)
+  private val configuredSharedPoolSize   = ConfigFactory.load().getInt("perftest.zReferencePoolSize")
+  private val sharedPoolSize             = if (runSingleUserJourney) 1 else configuredSharedPoolSize
+  private val allocatedReferences        = LoadSizing.allocate(noOfDeclarationZReferences, sharedPoolSize)
+  private val declarationZReferences     = allocatedReferences.declaration
+  private val sharedZReferences          = allocatedReferences.shared
 
   private val callbackAndSummaryRequests =
     Seq.fill(if (runSingleUserJourney) 1 else 5)(Seq(submitReturnSummaryCallback, getReportingResultsSummary)).flatten
   private val declarationRequests        = Seq(submitMonthlyReturn, submitDeclaration) ++ callbackAndSummaryRequests
 
+  private def referenceOperationTimeout(referenceCount: Int): FiniteDuration =
+    ((referenceCount + 4) / 5).seconds + 2.minutes
+
   before {
-    setupIsaManagers = Await.result(setupTestData(), 3.minutes)
-    setupIsaApplications = Await.result(setupApplications(), 1.minute)
-    setupReconciliationReportIsaManagers = Await.result(setupReconciliationReportZReferences(), 1.minute)
-    setupSubmissionOnlyIsaManagers = Await.result(setupSubmissionOnlyZReferences(), 1.minute)
+    val setup = for {
+      declarationManagers <- setupDeclarationZReferences(declarationZReferences)
+      _                    = setupIsaManagers = declarationManagers
+      applications        <- setupApplications()
+      _                    = setupIsaApplications = applications
+      sharedManagers      <- setupSharedZReferences(sharedZReferences)
+      _                    = setupSharedIsaManagers = sharedManagers
+    } yield ()
+
+    Await.result(setup, referenceOperationTimeout(declarationZReferences.size + sharedZReferences.size))
 
     memoryLoggerScheduler = Executors.newSingleThreadScheduledExecutor()
 
@@ -65,11 +93,14 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
       memoryLoggerScheduler.shutdownNow()
     }
 
-    val submissionZReferences =
+    val preparedSubmissionZReferences =
       Option(setupIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef)) ++
-        Option(setupSubmissionOnlyIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef))
+        Option(setupSharedIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef))
 
-    Await.result(testDataCleanUp(Option(setupIsaApplications), submissionZReferences), 3.minutes)
+    Await.result(
+      testDataCleanUp(Option(setupIsaApplications), preparedSubmissionZReferences),
+      referenceOperationTimeout(declarationZReferences.size + sharedZReferences.size)
+    )
   }
 
   val appFeeder: ChainBuilder =
@@ -84,43 +115,29 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
 
   val declarationFeeder: ChainBuilder =
     feed(
-      Iterator
-        .continually(setupIsaManagers.isaManager)
-        .flatten
-        .take(noOfDeclarationZReferences)
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken
-          )
-        }
+      declarationZReferences.indices.iterator.map { index =>
+        val im = setupIsaManagers.isaManager(index)
+        Map(
+          "isaManagerReference" -> im.zRef,
+          "bearerToken"         -> im.bearerToken
+        )
+      }
     )
 
-  val submissionOnlyFeeder: ChainBuilder =
+  private def sharedFeeder(rotation: Int): ChainBuilder =
     feed(
-      Iterator
-        .continually(setupSubmissionOnlyIsaManagers.isaManager)
-        .flatten
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken
-          )
-        }
+      LoadSizing.circular(sharedZReferences.indices, rotation).map { index =>
+        val im = setupSharedIsaManagers.isaManager(index)
+        Map(
+          "isaManagerReference" -> im.zRef,
+          "bearerToken"         -> im.bearerToken
+        )
+      }
     )
 
-  val reconciliationReportZRefFeeder: ChainBuilder =
-    feed(
-      Iterator
-        .continually(setupReconciliationReportIsaManagers.isaManager)
-        .flatten
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken
-          )
-        }
-    )
+  val submissionOnlyFeeder: ChainBuilder = sharedFeeder(rotation = 0)
+
+  val reconciliationReportZRefFeeder: ChainBuilder = sharedFeeder(rotation = sharedPoolSize / 2)
 
   val reconciliationReportPageFeeder: ChainBuilder =
     feed(

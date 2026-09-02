@@ -42,14 +42,7 @@ trait BaseRequests { self: PerftestConfiguration =>
   val disaReturnsTestOnlyRequests     = new DisaReturnsTestOnlyRequests(wsClient)
   val submissionTestOnlyRequests      = new SubmissionTestOnlyRequests(wsClient)
 
-  val noOfThirdPartyApplications          = if (runSingleUserJourney) 1 else 10
-  val noOfDeclarationZReferences          = if (runSingleUserJourney) 1 else 500
-  val noOfReconciliationReportZReferences = if (runSingleUserJourney) 1 else 100
-  val noOfSubmissionOnlyZReferences       = if (runSingleUserJourney) 1 else 10
-
-  private val declarationZReferenceStart          = 0
-  private val submissionOnlyZReferenceStart       = declarationZReferenceStart + noOfDeclarationZReferences
-  private val reconciliationReportZReferenceStart = submissionOnlyZReferenceStart + noOfSubmissionOnlyZReferences
+  val noOfThirdPartyApplications = if (runSingleUserJourney) 1 else 10
 
   private val authSetupParallelism = 10
   private val authSetupRateLimit   = 5
@@ -57,27 +50,25 @@ trait BaseRequests { self: PerftestConfiguration =>
   private val preparedZReferences  = TrieMap.empty[String, Unit]
   private val summaryZReferences   = TrieMap.empty[String, Unit]
 
-  private def zRefPool(start: Int, count: Int): List[String] =
-    (start until start + count).map { i =>
-      require(i < 10000, "Exceeded max ZRef limit (Z9999)")
-      f"Z$i%04d"
-    }.toList
-
   private def withBoundedConcurrency[A, B](items: Seq[A])(f: A => Future[B]): Future[Seq[B]] =
     Source(items.toList)
       .throttle(authSetupRateLimit, 1.second)
       .mapAsync(authSetupParallelism)(f)
       .runWith(Sink.seq)
 
-  def setupTestData(): Future[IsaManagers] = {
-    val zRefs: List[String] = zRefPool(declarationZReferenceStart, noOfDeclarationZReferences)
-    zRefs.foreach(summaryZReferences.put(_, ()))
+  def setupDeclarationZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
+    zReferences.foreach(summaryZReferences.put(_, ()))
+
+    val deleteMonthlyReturns =
+      if (zReferences.nonEmpty) submissionTestOnlyRequests.deleteMonthlyReturns(zReferences) else Future.unit
+    val deleteSummaries      =
+      if (zReferences.nonEmpty) disaReturnsTestOnlyRequests.deleteMonthlyReturnSummaries(zReferences) else Future.unit
 
     val setup = for {
       _           <- stubTestOnlyRequests.setReportingWindowsOpen()
-      _           <- submissionTestOnlyRequests.deleteMonthlyReturns(zRefs)
-      _           <- disaReturnsTestOnlyRequests.deleteMonthlyReturnSummaries(zRefs)
-      isaManagers <- withBoundedConcurrency(zRefs) { zRef =>
+      _           <- deleteMonthlyReturns
+      _           <- deleteSummaries
+      isaManagers <- withBoundedConcurrency(zReferences) { zRef =>
                        for {
                          _           <- prepareSubmissionZReference(zRef)
                          bearerToken <- authRequests.getSubmissionBearerToken(zRef)
@@ -93,39 +84,19 @@ trait BaseRequests { self: PerftestConfiguration =>
     }
   }
 
-  def setupSubmissionOnlyZReferences(): Future[IsaManagers] = {
-    val zRefs: List[String] = zRefPool(submissionOnlyZReferenceStart, noOfSubmissionOnlyZReferences)
-
+  def setupSharedZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
     val setup = for {
-      _           <- submissionTestOnlyRequests.deleteMonthlyReturns(zRefs)
-      isaManagers <- withBoundedConcurrency(zRefs) { zRef =>
+      _           <- submissionTestOnlyRequests.deleteMonthlyReturns(zReferences)
+      isaManagers <- withBoundedConcurrency(zReferences) { zRef =>
                        for {
                          _           <- prepareSubmissionZReference(zRef)
-                         bearerToken <- authRequests.getSubmissionBearerToken(zRef)
+                         bearerToken <- authRequests.getSubmissionBearerToken(zRef, s"$perfTestCredIdPrefix-$zRef")
                        } yield IsaManager(
                          zRef = zRef,
                          bearerToken = bearerToken
                        )
                      }
     } yield IsaManagers(isaManagers)
-
-    setup.recover { case e =>
-      cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
-    }
-  }
-
-  def setupReconciliationReportZReferences(): Future[IsaManagers] = {
-    val zRefs: List[String] =
-      zRefPool(reconciliationReportZReferenceStart, noOfReconciliationReportZReferences)
-    val setup               = withBoundedConcurrency(zRefs) { zRef =>
-      for {
-        _           <- prepareSubmissionZReference(zRef)
-        bearerToken <- authRequests.getSubmissionBearerToken(zRef, s"$perfTestCredIdPrefix-$zRef")
-      } yield IsaManager(
-        zRef = zRef,
-        bearerToken = bearerToken
-      )
-    }.map(IsaManagers.apply)
 
     setup.recover { case e =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
