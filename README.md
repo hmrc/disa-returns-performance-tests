@@ -63,9 +63,9 @@ Submission setup and cleanup use:
 - `POST /disa-returns-submission/test-only/monthly-returns` with `{"zReferences":[...]}` to delete scoped monthly returns
 - `DELETE /disa-returns-submission/test-only/overrides/:zReference` to remove an aggregate override
 - `PUT /disa-returns-submission/test-only/overrides/:zReference` to set its clock and reporting window
-- `POST /test-only/monthly` on `DISA_RETURNS` with `{"zReferences":[...]}` to delete scoped callback summaries
+- `POST /test-only/monthly` on `DISA_RETURNS` with `{"zReferences":[...]}` to delete scoped reconciliation-report-ready callback data
 
-Submission monthly-return cleanup covers all declaration and shared references. Summary cleanup covers declaration
+Submission monthly-return cleanup covers all declaration and shared references. Callback cleanup covers declaration
 references only. Aggregate overrides cover every prepared declaration and shared reference and use the same fixed clock
 and reporting window. Setup and cleanup are rate-limited to five references per second; their `Await` budgets are derived
 from that rate with a two-minute margin instead of fixed timeouts.
@@ -83,9 +83,9 @@ The runner's fallback 1/5/1-minute phases allocate 720, 1,800, and 3,600 unique 
 and 1000% respectively. A custom shared pool can be supplied with `-Dperftest.zReferencePoolSize`; it must be positive
 and fit beside the calculated declaration allocation in the available namespace.
 
-The callback and summary requests are grouped causally after each successful submission and declaration. Full runs send
-five callback/summary pairs per declaration, preserving the previous request-level 5:1 callback volume ratio without a
-standalone journey racing declaration; smoke runs send one pair.
+The callback requests are grouped causally after each successful submission and declaration. Full runs send five
+callbacks per declaration, preserving the previous request-level 5:1 callback volume ratio without a standalone journey
+racing declaration; smoke runs send one callback.
 
 The submission-only and reconciliation journeys deliberately cycle over the shared reference pool. Gatling reports
 latency for the workload, but the suite has no latency pass/fail SLO.
@@ -95,7 +95,6 @@ latency for the workload, but the suite has no latency pass/fail SLO.
 - `POST /monthly/:zReference`
 - `POST /monthly/:zReference/declaration`
 - `POST /callback/monthly/:zReference`
-- `GET /monthly/:zReference/results/summary`
 - `GET /monthly/:zReference/results?page=:page`
 
 Tax year and month are derived from the aggregate override rather than URL segments.
@@ -107,8 +106,7 @@ Tax year and month are derived from the aggregate override rather than URL segme
   four-line NDJSON body. This keeps request-rate validation meaningful without sending about 28 GB through a single
   local service stack. Jenkins and direct `sbt` runs retain the configured 16,000-line body.
 
-Both scripts run `sbt scalafmtCheckAll scalafmtSbtCheck` before Gatling.
-They stop immediately if formatting or Gatling fails.
+Both scripts stop immediately if Gatling fails.
 
 Run either script from the repository root, for example:
 
@@ -117,6 +115,12 @@ Run either script from the repository root, for example:
 ```
 
 ### Commands
+
+Run formatting and compile the test suite before committing:
+
+```bash
+sbt precommit
+```
 
 Run smoke test (locally) as follows:
 

@@ -24,31 +24,18 @@ import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerOnlyWithBearerT
 
 object MonthlyReconciliationReportRequests {
 
-  val npsCallbackPayload: String = s"""
+  val reconciliationReportReadyCallbackPayload: String = s"""
                    |{
                    |  "totalRecords": 1000
                    |}
                    |""".stripMargin
 
-  val submitReturnSummaryCallback: HttpRequestBuilder =
-    http("POST Reconciliation report summary callback")
+  val submitReconciliationReportReadyCallback: HttpRequestBuilder =
+    http("POST Reconciliation report ready callback")
       .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}")
       .headers(headerWithJsonContentType)
-      .body(StringBody(npsCallbackPayload))
+      .body(StringBody(reconciliationReportReadyCallbackPayload))
       .check(status.is(204))
-
-  val getReportingResultsSummary: HttpRequestBuilder =
-    http("GET Reconciliation report summary")
-      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reportingResultsSummaryPath")
-      .headers(headerOnlyWithBearerToken)
-      .check(
-        status.is(200),
-        jsonPath("$.returnResultsLocation").is(
-          s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath?page=0"
-        ),
-        jsonPath("$.totalRecords").ofType[Int].is(1000),
-        jsonPath("$.numberOfPages").ofType[Int].is(100)
-      )
 
   val getReconciliationReport: HttpRequestBuilder =
     http("GET Reconciliation report")
