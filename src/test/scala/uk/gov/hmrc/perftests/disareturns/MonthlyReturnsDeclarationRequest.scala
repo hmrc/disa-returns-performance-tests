@@ -28,8 +28,13 @@ object MonthlyReturnsDeclarationRequest {
 
   val submitDeclaration: HttpRequestBuilder =
     http("POST Declaration")
-      .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}/declaration")
+      .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/declaration")
       .headers(headerWithClientIdAndBearerToken)
       .body(StringBody(declarationPayload))
-      .check(status.is(200))
+      .check(
+        status.is(200),
+        jsonPath("$.returnResultsSummaryLocation").is(
+          s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/results/summary"
+        )
+      )
 }

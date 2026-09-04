@@ -35,6 +35,7 @@ class AuthRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) ext
       |  },
       |  "affinityGroup": "Organisation",
       |  "credId": "credIdPlaceholder",
+      |  "excludeGnapToken": true,
       |  "credentialStrength": "strong",
       |  "enrolments": [
       |    {

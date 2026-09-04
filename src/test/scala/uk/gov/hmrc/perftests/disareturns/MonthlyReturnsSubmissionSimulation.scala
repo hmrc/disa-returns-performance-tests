@@ -16,48 +16,91 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
+import com.typesafe.config.ConfigFactory
 import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
-import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests.{getReconciliationReport, getReportingResultsSummary, submitReturnSummaryCallback}
-import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest.submitDeclaration
-import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests.submitMonthlyReturn
-import uk.gov.hmrc.perftests.disareturns.Util.DirectMemoryLogger
-import uk.gov.hmrc.perftests.disareturns.Util.RandomDataGenerator.{getMonth, getTaxYear}
-import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{submissionMonth, submissionTaxYear}
+import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests._
+import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest._
+import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsSubmissionRequests._
 import uk.gov.hmrc.perftests.disareturns.models.{Applications, IsaManagers}
 import uk.gov.hmrc.perftests.disareturns.testSetup.BaseRequests
+import uk.gov.hmrc.perftests.disareturns.util.{DirectMemoryLogger, LoadSizing}
 
+import java.util.concurrent._
 import scala.concurrent.Await
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
-  var setupIsaManagers: IsaManagers                     = _
-  var setupIsaApplications: Applications                = _
-  var setupReconciliationReportIsaManagers: IsaManagers = _
-  var setupSubmissionOnlyIsaManagers: IsaManagers       = _
+  var setupIsaManagers: IsaManagers                   = _
+  var setupIsaApplications: Applications              = _
+  var setupSharedIsaManagers: IsaManagers             = _
+  var memoryLoggerScheduler: ScheduledExecutorService = _
+
+  private val noOfDeclarationZReferences = definitions(labels)
+    .find(_.id == "post-declare-monthly-returns")
+    .map { declarationJourney =>
+      LoadSizing.declarationUserCount(
+        smoke = runSingleUserJourney,
+        journeyLoad = declarationJourney.load,
+        loadFactor = loadFactor,
+        rampUpTime = rampUpTime,
+        constantRateTime = constantRateTime,
+        rampDownTime = rampDownTime
+      )
+    }
+    .getOrElse(0)
+  private val configuredSharedPoolSize   = ConfigFactory.load().getInt("perftest.zReferencePoolSize")
+  private val sharedPoolSize             = if (runSingleUserJourney) 1 else configuredSharedPoolSize
+  private val allocatedReferences        = LoadSizing.allocate(noOfDeclarationZReferences, sharedPoolSize)
+  private val declarationZReferences     = allocatedReferences.declaration
+  private val sharedZReferences          = allocatedReferences.shared
+
+  private val callbackAndSummaryRequests =
+    Seq.fill(if (runSingleUserJourney) 1 else 5)(Seq(submitReturnSummaryCallback, getReportingResultsSummary)).flatten
+  private val declarationRequests        = Seq(submitMonthlyReturn, submitDeclaration) ++ callbackAndSummaryRequests
+
+  private def referenceOperationTimeout(referenceCount: Int): FiniteDuration =
+    ((referenceCount + 4) / 5).seconds + 2.minutes
 
   before {
-    setupIsaManagers = Await.result(setupTestData(), 3.minutes)
-    setupIsaApplications = Await.result(setupApplications(), 1.minute)
-    setupReconciliationReportIsaManagers = Await.result(setupReconciliationReportZReferences(), 1.minute)
-    setupSubmissionOnlyIsaManagers = Await.result(setupSubmissionOnlyZReferences(), 1.minute)
+    val setup = for {
+      declarationManagers <- setupDeclarationZReferences(declarationZReferences)
+      _                    = setupIsaManagers = declarationManagers
+      applications        <- setupApplications()
+      _                    = setupIsaApplications = applications
+      sharedManagers      <- setupSharedZReferences(sharedZReferences)
+      _                    = setupSharedIsaManagers = sharedManagers
+    } yield ()
 
-    val scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+    Await.result(setup, referenceOperationTimeout(declarationZReferences.size + sharedZReferences.size))
 
-    scheduler.scheduleAtFixedRate(
+    memoryLoggerScheduler = Executors.newSingleThreadScheduledExecutor()
+
+    memoryLoggerScheduler.scheduleAtFixedRate(
       new Runnable {
         override def run(): Unit = DirectMemoryLogger.log()
       },
       0,
       5,
-      java.util.concurrent.TimeUnit.SECONDS
+      TimeUnit.SECONDS
     )
   }
 
   after {
-    testDataCleanUp(setupIsaApplications)
+    if (memoryLoggerScheduler != null) {
+      memoryLoggerScheduler.shutdownNow()
+    }
+
+    val preparedSubmissionZReferences =
+      Option(setupIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef)) ++
+        Option(setupSharedIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef))
+
+    Await.result(
+      testDataCleanUp(Option(setupIsaApplications), preparedSubmissionZReferences),
+      referenceOperationTimeout(declarationZReferences.size + sharedZReferences.size)
+    )
   }
 
   val appFeeder: ChainBuilder =
@@ -70,71 +113,36 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
         }
     )
 
-  val isaManagerFeeder: ChainBuilder =
-    feed(
-      Iterator
-        .continually(setupIsaManagers.isaManager)
-        .flatten
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken,
-            "taxYear"             -> submissionTaxYear,
-            "month"               -> submissionMonth
-          )
-        }
-    )
-
   val declarationFeeder: ChainBuilder =
     feed(
-      Iterator
-        .continually(setupIsaManagers.isaManager)
-        .flatten
-        .take(noOfDeclarationZReferences)
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken,
-            "taxYear"             -> submissionTaxYear,
-            "month"               -> submissionMonth
-          )
-        }
+      declarationZReferences.indices.iterator.map { index =>
+        val im = setupIsaManagers.isaManager(index)
+        Map(
+          "isaManagerReference" -> im.zRef,
+          "bearerToken"         -> im.bearerToken
+        )
+      }
     )
 
-  val submissionOnlyFeeder: ChainBuilder =
+  private def sharedFeeder(rotation: Int): ChainBuilder =
     feed(
-      Iterator
-        .continually(setupSubmissionOnlyIsaManagers.isaManager)
-        .flatten
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken,
-            "taxYear"             -> submissionTaxYear,
-            "month"               -> submissionMonth
-          )
-        }
+      LoadSizing.circular(sharedZReferences.indices, rotation).map { index =>
+        val im = setupSharedIsaManagers.isaManager(index)
+        Map(
+          "isaManagerReference" -> im.zRef,
+          "bearerToken"         -> im.bearerToken
+        )
+      }
     )
 
-  val reconciliationReportZRefFeeder: ChainBuilder =
-    feed(
-      Iterator
-        .continually(setupReconciliationReportIsaManagers.isaManager)
-        .flatten
-        .map { im =>
-          Map(
-            "isaManagerReference" -> im.zRef,
-            "bearerToken"         -> im.bearerToken,
-            "taxYear"             -> getTaxYear,
-            "month"               -> getMonth
-          )
-        }
-    )
+  val submissionOnlyFeeder: ChainBuilder = sharedFeeder(rotation = 0)
+
+  val reconciliationReportZRefFeeder: ChainBuilder = sharedFeeder(rotation = sharedPoolSize / 2)
 
   val reconciliationReportPageFeeder: ChainBuilder =
     feed(
       Iterator
-        .continually((0 until 100).map(page => Map("page" -> page.toString)))
+        .continually((0 until 100).map(page => Map("page" -> page)))
         .flatten
     )
 
@@ -153,18 +161,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   ).withActions(
     declarationFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
   ).withRequests(
-    submitMonthlyReturn,
-    submitDeclaration
-  )
-
-  setup(
-    "get-report-summary-callback-and-summary",
-    "GET Report Summary Callback & Summary"
-  ).withActions(
-    isaManagerFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
-  ).withRequests(
-    submitReturnSummaryCallback,
-    getReportingResultsSummary
+    declarationRequests: _*
   )
 
   setup(

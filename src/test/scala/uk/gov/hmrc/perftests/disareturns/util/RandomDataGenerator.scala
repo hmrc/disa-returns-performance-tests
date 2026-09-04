@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.perftests.disareturns.Util
+package uk.gov.hmrc.perftests.disareturns.util
 
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter

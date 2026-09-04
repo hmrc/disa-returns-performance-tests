@@ -32,22 +32,32 @@ object MonthlyReconciliationReportRequests {
 
   val submitReturnSummaryCallback: HttpRequestBuilder =
     http("POST Reconciliation report summary callback")
-      .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}/2025-26/#{month}")
+      .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}")
       .headers(headerWithJsonContentType)
       .body(StringBody(npsCallbackPayload))
       .check(status.is(204))
 
   val getReportingResultsSummary: HttpRequestBuilder =
     http("GET Reconciliation report summary")
-      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/2025-26/#{month}$reportingResultsSummaryPath")
+      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reportingResultsSummaryPath")
       .headers(headerOnlyWithBearerToken)
-      .check(status.is(200))
+      .check(
+        status.is(200),
+        jsonPath("$.returnResultsLocation").is(
+          s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath?page=0"
+        ),
+        jsonPath("$.totalRecords").ofType[Int].is(1000),
+        jsonPath("$.numberOfPages").ofType[Int].is(100)
+      )
 
   val getReconciliationReport: HttpRequestBuilder =
     http("GET Reconciliation report")
-      .get(
-        s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}$reconciliationReportPath?page=#{page}"
-      )
+      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath?page=#{page}")
       .headers(headerOnlyWithBearerToken)
-      .check(status.is(200))
+      .check(
+        status.is(200),
+        jsonPath("$.currentPage").ofType[Int].is(session => session("page").as[Int]),
+        jsonPath("$.totalRecords").ofType[Int].is(1000),
+        jsonPath("$.totalNumberOfPages").ofType[Int].is(100)
+      )
 }

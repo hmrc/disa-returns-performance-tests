@@ -19,7 +19,7 @@ package uk.gov.hmrc.perftests.disareturns
 import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
-import uk.gov.hmrc.perftests.disareturns.Util.NdjsonPayloadGenerator
+import uk.gov.hmrc.perftests.disareturns.util.NdjsonPayloadGenerator
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsHost, disaReturnsRoute}
 import uk.gov.hmrc.perftests.disareturns.constant.Headers.headerWithClientIdAndBearerToken
 
@@ -37,10 +37,10 @@ object MonthlyReturnsSubmissionRequests {
 
   val submitMonthlyReturn: HttpRequestBuilder =
     http("POST Submit monthly return")
-      .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}/#{taxYear}/#{month}")
+      .post(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}")
       .headers(headerWithClientIdAndBearerToken)
+      .header("Content-Type", "application/x-ndjson")
       .body(RawFileBody(submissionPayloadFilePath))
-      .asJson
       .check(status.is(204))
 
 }
