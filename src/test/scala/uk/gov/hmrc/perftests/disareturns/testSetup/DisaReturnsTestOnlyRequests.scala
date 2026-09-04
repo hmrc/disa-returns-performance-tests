@@ -19,7 +19,7 @@ package uk.gov.hmrc.perftests.disareturns.testSetup
 import play.api.libs.json.Json
 import play.api.libs.ws.DefaultBodyWritables.writeableOf_String
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
-import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsHost, disaReturnsMonthlyCleanupPath}
+import uk.gov.hmrc.perftests.disareturns.constant.AppConfig.{disaReturnsCallbackCleanupPath, disaReturnsHost}
 import uk.gov.hmrc.perftests.disareturns.models.SetupAssertions
 
 import javax.inject.Singleton
@@ -28,14 +28,14 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class DisaReturnsTestOnlyRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
 
-  def deleteMonthlyReturnSummaries(zReferences: Seq[String]): Future[Unit] =
-    ws.url(s"$disaReturnsHost$disaReturnsMonthlyCleanupPath")
+  def deleteReconciliationReportReadyCallbacks(zReferences: Seq[String]): Future[Unit] =
+    ws.url(s"$disaReturnsHost$disaReturnsCallbackCleanupPath")
       .addHttpHeaders("Content-Type" -> "application/json")
       .post(Json.obj("zReferences" -> zReferences).toString())
       .map { response =>
         ensureSetup(
           response.status == 204,
-          s"Failed to delete monthly return summaries for [${zReferences.size}] Z-references. Status=${response.status}, Body=${response.body}"
+          s"Failed to delete reconciliation report ready callbacks for [${zReferences.size}] Z-references. Status=${response.status}, Body=${response.body}"
         )
       }
 }
