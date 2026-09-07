@@ -20,31 +20,35 @@ import io.gatling.core.Predef._
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
 import uk.gov.hmrc.perftests.disareturns.constant.AppConfig._
-import uk.gov.hmrc.perftests.disareturns.constant.Headers.{headerOnlyWithBearerToken, headerWithJsonContentType}
+import uk.gov.hmrc.perftests.disareturns.constant.Headers.headerOnlyWithBearerToken
 
 object MonthlyReconciliationReportRequests {
-
-  val reconciliationReportReadyCallbackPayload: String = s"""
-                   |{
-                   |  "totalRecords": 1000
-                   |}
-                   |""".stripMargin
 
   val submitReconciliationReportReadyCallback: HttpRequestBuilder =
     http("POST Reconciliation report ready callback")
       .post(s"$disaReturnsHost$disaReturnsCallbackPath#{isaManagerReference}")
-      .headers(headerWithJsonContentType)
-      .body(StringBody(reconciliationReportReadyCallbackPayload))
       .check(status.is(204))
 
-  val getReconciliationReport: HttpRequestBuilder =
-    http("GET Reconciliation report")
-      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath?page=#{page}")
+  val getFirstReconciliationReportPage: HttpRequestBuilder =
+    http("GET first reconciliation report page")
+      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath")
+      .queryParam("limit", "500")
       .headers(headerOnlyWithBearerToken)
       .check(
         status.is(200),
-        jsonPath("$.currentPage").ofType[Int].is(session => session("page").as[Int]),
-        jsonPath("$.totalRecords").ofType[Int].is(1000),
-        jsonPath("$.totalNumberOfPages").ofType[Int].is(100)
+        jsonPath("$.returnResults").exists,
+        jsonPath("$.nextCursor").ofType[String].saveAs("nextCursor")
+      )
+
+  val getNextReconciliationReportPage: HttpRequestBuilder =
+    http("GET next reconciliation report page")
+      .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath")
+      .queryParam("cursor", "#{nextCursor}")
+      .queryParam("limit", "500")
+      .headers(headerOnlyWithBearerToken)
+      .check(
+        status.is(200),
+        jsonPath("$.returnResults").exists,
+        jsonPath("$.nextCursor").notExists
       )
 }
