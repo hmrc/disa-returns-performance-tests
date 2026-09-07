@@ -48,7 +48,7 @@ trait BaseRequests { self: PerftestConfiguration =>
   private val authSetupRateLimit   = 5
   private val createdApplications  = TrieMap.empty[String, Application]
   private val preparedZReferences  = TrieMap.empty[String, Unit]
-  private val summaryZReferences   = TrieMap.empty[String, Unit]
+  private val callbackZReferences  = TrieMap.empty[String, Unit]
 
   private def withBoundedConcurrency[A, B](items: Seq[A])(f: A => Future[B]): Future[Seq[B]] =
     Source(items.toList)
@@ -57,17 +57,18 @@ trait BaseRequests { self: PerftestConfiguration =>
       .runWith(Sink.seq)
 
   def setupDeclarationZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
-    zReferences.foreach(summaryZReferences.put(_, ()))
+    zReferences.foreach(callbackZReferences.put(_, ()))
 
     val deleteMonthlyReturns =
       if (zReferences.nonEmpty) submissionTestOnlyRequests.deleteMonthlyReturns(zReferences) else Future.unit
-    val deleteSummaries      =
-      if (zReferences.nonEmpty) disaReturnsTestOnlyRequests.deleteMonthlyReturnSummaries(zReferences) else Future.unit
+    val deleteCallbacks      =
+      if (zReferences.nonEmpty) disaReturnsTestOnlyRequests.deleteReconciliationReportReadyCallbacks(zReferences)
+      else Future.unit
 
     val setup = for {
       _           <- stubTestOnlyRequests.setReportingWindowsOpen()
       _           <- deleteMonthlyReturns
-      _           <- deleteSummaries
+      _           <- deleteCallbacks
       isaManagers <- withBoundedConcurrency(zReferences) { zRef =>
                        for {
                          _           <- prepareSubmissionZReference(zRef)
@@ -162,11 +163,11 @@ trait BaseRequests { self: PerftestConfiguration =>
           ()
         }
       } else Future.unit
-    val summaryCleanup       =
-      if (summaryZReferences.nonEmpty) {
-        disaReturnsTestOnlyRequests.deleteMonthlyReturnSummaries(summaryZReferences.keys.toSeq).recover {
+    val callbackCleanup      =
+      if (callbackZReferences.nonEmpty) {
+        disaReturnsTestOnlyRequests.deleteReconciliationReportReadyCallbacks(callbackZReferences.keys.toSeq).recover {
           case NonFatal(e) =>
-            println(s"Warning: failed to clean disa-returns monthly return summaries: ${e.getMessage}")
+            println(s"Warning: failed to clean disa-returns reconciliation report ready callbacks: ${e.getMessage}")
             ()
         }
       } else Future.unit
@@ -179,7 +180,7 @@ trait BaseRequests { self: PerftestConfiguration =>
           }
         }.map(_ => ())
       } else Future.unit
-    val submissionCleanup    = Future.sequence(Seq(monthlyReturnCleanup, summaryCleanup, overrideCleanup)).map(_ => ())
+    val submissionCleanup    = Future.sequence(Seq(monthlyReturnCleanup, callbackCleanup, overrideCleanup)).map(_ => ())
 
     Future
       .sequence(applicationCleanup :+ submissionCleanup.map(_ => ()))

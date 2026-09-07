@@ -57,9 +57,8 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   private val declarationZReferences     = allocatedReferences.declaration
   private val sharedZReferences          = allocatedReferences.shared
 
-  private val callbackAndSummaryRequests =
-    Seq.fill(if (runSingleUserJourney) 1 else 5)(Seq(submitReturnSummaryCallback, getReportingResultsSummary)).flatten
-  private val declarationRequests        = Seq(submitMonthlyReturn, submitDeclaration) ++ callbackAndSummaryRequests
+  private val callbackRequests    = Seq.fill(if (runSingleUserJourney) 1 else 5)(submitReconciliationReportReadyCallback)
+  private val declarationRequests = Seq(submitMonthlyReturn, submitDeclaration) ++ callbackRequests
 
   private def referenceOperationTimeout(referenceCount: Int): FiniteDuration =
     ((referenceCount + 4) / 5).seconds + 2.minutes

@@ -10,3 +10,5 @@ lazy val root = (project in file("."))
     Test / testOptions := Seq.empty,
     libraryDependencies ++= Dependencies.test
   )
+
+addCommandAlias("precommit", ";scalafmtAll;scalafmtSbt;Test/compile")
