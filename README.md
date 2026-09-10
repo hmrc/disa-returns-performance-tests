@@ -95,7 +95,7 @@ latency for the workload, but the suite has no latency pass/fail SLO.
 - `POST /monthly/:zReference`
 - `POST /monthly/:zReference/declaration`
 - `POST /callback/monthly/:zReference`
-- `GET /monthly/:zReference/results?page=:page`
+- `GET /monthly/:zReference/results` with optional `cursor` and `limit` query parameters
 
 Tax year and month are derived from the aggregate override rather than URL segments.
 

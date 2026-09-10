@@ -138,13 +138,6 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
 
   val reconciliationReportZRefFeeder: ChainBuilder = sharedFeeder(rotation = sharedPoolSize / 2)
 
-  val reconciliationReportPageFeeder: ChainBuilder =
-    feed(
-      Iterator
-        .continually((0 until 100).map(page => Map("page" -> page)))
-        .flatten
-    )
-
   setup(
     "post-submit-monthly-returns",
     "POST Submit Monthly Return"
@@ -167,9 +160,10 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     "get-reconciliation-report",
     "Get Reconciliation Report"
   ).withActions(
-    reconciliationReportZRefFeeder.actionBuilders ++ reconciliationReportPageFeeder.actionBuilders: _*
+    reconciliationReportZRefFeeder.actionBuilders: _*
   ).withRequests(
-    getReconciliationReport
+    getFirstReconciliationReportPage,
+    getNextReconciliationReportPage
   )
 
   runSimulation()
