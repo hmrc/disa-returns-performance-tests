@@ -11,12 +11,23 @@ Start Mongo Docker container following instructions from the [MDTP Handbook](htt
 Start services as follows:
 
 ```bash
-sm2 --start DISA_RETURNS_ALL
+sm2 --start DISA_RETURNS_ALL --appendArgs '{
+  "DISA_RETURNS": [
+    "-Dfeatures.enrolment-verification-enabled=false",
+    "-Dfeatures.strict-z-reference-validation-enabled=false",
+    "-Dapplication.router=testOnlyDoNotUseInAppConf.Routes"
+  ],
+  "DISA_RETURNS_SUBMISSION": [
+    "-Dfeatures.strict-z-reference-validation-enabled=false",
+    "-Dapplication.router=testOnlyDoNotUseInAppConf.Routes"
+  ]
+}'
 ```
 
-The performance setup uses test-only endpoints in both `DISA_RETURNS` and `DISA_RETURNS_SUBMISSION`. Run both services
-with `-Dapplication.router=testOnlyDoNotUseInAppConf.Routes` when starting them outside the configured non-production
-environments. The suite also requires `DISA_RETURNS_STUB` at `POST /etmp/reporting-window-state`.
+`DISA_RETURNS` needs enrolment verification disabled because the suite shares one bearer token across Z-references. Both
+`DISA_RETURNS` and `DISA_RETURNS_SUBMISSION` need strict Z-reference validation disabled for references containing five
+to eight digits. Their test-only routers provide the bulk setup and cleanup endpoints. The suite also requires
+`DISA_RETURNS_STUB` at `POST /etmp/reporting-window-state`.
 
 ### Logging
 
@@ -32,28 +43,11 @@ Do **NOT** run a full performance test against staging from your local machine. 
 
 The suite prepares aggregate clock/reporting-window overrides and scoped monthly-return data before execution, then
 deletes those records and overrides afterwards. Each aggregate uses the fixed clock date `2026-08-17` and that day's
-reporting window. References are allocated dynamically from `Z0000` to `Z9999`; reserved stub error references `Z1400`,
-`Z1500`, and `Z1503` are always excluded. The suite fails before setup if the required allocation exceeds the remaining
-9,997-reference namespace.
+reporting window. References are allocated dynamically using the staging-only 4-to-8 digit format. Reserved stub error
+references `Z1400`, `Z1500`, and `Z1503` are excluded.
 
-The declaration journey gets one unique reference for every user Gatling will inject. Its count is calculated from the
-active `post-declare-monthly-returns` load, load percentage, and active ramp-up, constant-rate, and ramp-down durations
-using the same truncation and rounding as the runner and Gatling. Its feeder is finite, so a reference cannot be reused.
-Smoke runs always allocate one declaration reference.
-
-Submission-only and reconciliation journeys share one authenticated circular pool configured by
-`perftest.zReferencePoolSize` (default 1,000, smoke always one). They have independent feeders; reconciliation starts
-halfway around the pool. The pool follows the declaration allocation in the list of allowed references, rather than
-assuming a contiguous range. Shared credentials use the performance-test credential prefix required by the
-reconciliation stub fast path and the same tokens are valid for submission.
-
-At Jenkins loads, the default 1,000-reference pool is reused at these approximate intervals during constant load:
-
-| Load percentage | Submission-only (base 10 JPS) | Reconciliation (base 5 JPS) |
-| --- | ---: | ---: |
-| 200 | 50 seconds | 100 seconds |
-| 500 | 20 seconds | 40 seconds |
-| 1000 | 10 seconds | 20 seconds |
+Each injected user gets a unique reference across the declaration, submission-only, and reconciliation journeys. Counts
+are calculated from each journey's load and duration. Smoke runs allocate one reference per journey.
 
 Do not overlap runs that use this namespace. Cleanup is scoped to references prepared by the run and does not delete all
 service data.
@@ -61,34 +55,17 @@ service data.
 Submission setup and cleanup use:
 
 - `POST /disa-returns-submission/test-only/monthly-returns` with `{"zReferences":[...]}` to delete scoped monthly returns
-- `DELETE /disa-returns-submission/test-only/overrides/:zReference` to remove an aggregate override
-- `PUT /disa-returns-submission/test-only/overrides/:zReference` to set its clock and reporting window
+- `POST /disa-returns-submission/test-only/overrides/delete` to delete overrides
+- `PUT /disa-returns-submission/test-only/overrides` to set clock and reporting window overrides
 - `POST /test-only/monthly` on `DISA_RETURNS` with `{"zReferences":[...]}` to delete scoped reconciliation-report-ready callback data
 
-Submission monthly-return cleanup covers all declaration and shared references. Callback cleanup covers declaration
-references only. Aggregate overrides cover every prepared declaration and shared reference and use the same fixed clock
-and reporting window. Setup and cleanup are rate-limited to five references per second; their `Await` budgets are derived
-from that rate with a two-minute margin instead of fixed timeouts.
-
-With Jenkins phases of 1 minute ramp-up, 8 minutes constant rate, and 1 minute ramp-down, expected allocations,
-five-reference-per-second processing durations, and timeout budgets are:
-
-| Load percentage | Unique declarations | Shared pool | Expected setup/cleanup | Timeout budget |
-| --- | ---: | ---: | ---: | ---: |
-| 200 | 1,080 | 1,000 | 6 minutes 56 seconds | 8 minutes 56 seconds |
-| 500 | 2,700 | 1,000 | 12 minutes 20 seconds | 14 minutes 20 seconds |
-| 1000 | 5,400 | 1,000 | 21 minutes 20 seconds | 23 minutes 20 seconds |
-
-The runner's fallback 1/5/1-minute phases allocate 720, 1,800, and 3,600 unique declaration references at 200%, 500%,
-and 1000% respectively. A custom shared pool can be supplied with `-Dperftest.zReferencePoolSize`; it must be positive
-and fit beside the calculated declaration allocation in the available namespace.
+Submission monthly-return cleanup covers all references. Callback cleanup covers declaration
+references only. Overrides use the same fixed clock and reporting window. One bearer token is shared by all
+Z-references. Setup and cleanup time out after two minutes.
 
 The callback requests are grouped causally after each successful submission and declaration. Full runs send five
 callbacks per declaration, preserving the previous request-level 5:1 callback volume ratio without a standalone journey
 racing declaration; smoke runs send one callback.
-
-The submission-only and reconciliation journeys deliberately cycle over the shared reference pool. Gatling reports
-latency for the workload, but the suite has no latency pass/fail SLO.
 
 ### Routes Under Test
 
@@ -125,7 +102,7 @@ sbt precommit
 Run smoke test (locally) as follows:
 
 ```bash
-sbt -Dperftest.runSmokeTest=true -DrunLocal=true gatling:test
+sbt -Dperftest.runSmokeTest=true -DrunLocal=true "Gatling / test"
 ```
 
 Run full performance test (locally) as follows:
@@ -142,16 +119,13 @@ sbt -DrunLocal=false \
   -Dperftest.rampupTime=1 \
   -Dperftest.constantRateTime=8 \
   -Dperftest.rampdownTime=1 \
-  gatling:test
+  "Gatling / test"
 ```
-
-To change the shared circular pool, add (for example) `-Dperftest.zReferencePoolSize=1500`. The declaration count plus
-pool size cannot exceed the 9,997 non-reserved references.
 
 Run smoke test (staging) as follows:
 
 ```bash
-sbt -Dperftest.runSmokeTest=true -DrunLocal=false gatling:test
+sbt -Dperftest.runSmokeTest=true -DrunLocal=false "Gatling / test"
 ```
 
 ## Scalafmt

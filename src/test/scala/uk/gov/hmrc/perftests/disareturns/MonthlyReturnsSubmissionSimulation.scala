@@ -16,7 +16,6 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
-import com.typesafe.config.ConfigFactory
 import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
@@ -29,51 +28,56 @@ import uk.gov.hmrc.perftests.disareturns.util.{DirectMemoryLogger, LoadSizing}
 
 import java.util.concurrent._
 import scala.concurrent.Await
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.duration.DurationInt
 
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
   var setupIsaManagers: IsaManagers                   = _
   var setupIsaApplications: Applications              = _
-  var setupSharedIsaManagers: IsaManagers             = _
+  var setupNonDeclarationIsaManagers: IsaManagers     = _
   var memoryLoggerScheduler: ScheduledExecutorService = _
 
-  private val noOfDeclarationZReferences = definitions(labels)
-    .find(_.id == "post-declare-monthly-returns")
-    .map { declarationJourney =>
-      LoadSizing.declarationUserCount(
-        smoke = runSingleUserJourney,
-        journeyLoad = declarationJourney.load,
-        loadFactor = loadFactor,
-        rampUpTime = rampUpTime,
-        constantRateTime = constantRateTime,
-        rampDownTime = rampDownTime
-      )
-    }
-    .getOrElse(0)
-  private val configuredSharedPoolSize   = ConfigFactory.load().getInt("perftest.zReferencePoolSize")
-  private val sharedPoolSize             = if (runSingleUserJourney) 1 else configuredSharedPoolSize
-  private val allocatedReferences        = LoadSizing.allocate(noOfDeclarationZReferences, sharedPoolSize)
-  private val declarationZReferences     = allocatedReferences.declaration
-  private val sharedZReferences          = allocatedReferences.shared
+  private def userCount(journeyId: String): Int =
+    definitions(labels)
+      .find(_.id == journeyId)
+      .map { journey =>
+        LoadSizing.userCount(
+          smoke = runSingleUserJourney,
+          journeyLoad = journey.load,
+          loadFactor = loadFactor,
+          rampUpTime = rampUpTime,
+          constantRateTime = constantRateTime,
+          rampDownTime = rampDownTime
+        )
+      }
+      .getOrElse(0)
+
+  private val allocatedReferences       = LoadSizing.allocate(
+    declarationCount = userCount("post-declare-monthly-returns"),
+    submissionCount = userCount("post-submit-monthly-returns"),
+    reconciliationCount = userCount("get-reconciliation-report")
+  )
+  private val declarationZReferences    = allocatedReferences.declaration
+  private val submissionZReferences     = allocatedReferences.submission
+  private val reconciliationZReferences = allocatedReferences.reconciliation
+  private val nonDeclarationZReferences = submissionZReferences ++ reconciliationZReferences
 
   private val callbackRequests    = Seq.fill(if (runSingleUserJourney) 1 else 5)(submitReconciliationReportReadyCallback)
   private val declarationRequests = Seq(submitMonthlyReturn, submitDeclaration) ++ callbackRequests
 
-  private def referenceOperationTimeout(referenceCount: Int): FiniteDuration =
-    ((referenceCount + 4) / 5).seconds + 2.minutes
+  private val setupAndCleanupTimeout = 2.minutes
 
   before {
     val setup = for {
-      declarationManagers <- setupDeclarationZReferences(declarationZReferences)
-      _                    = setupIsaManagers = declarationManagers
-      applications        <- setupApplications()
-      _                    = setupIsaApplications = applications
-      sharedManagers      <- setupSharedZReferences(sharedZReferences)
-      _                    = setupSharedIsaManagers = sharedManagers
+      declarationManagers    <- setupDeclarationZReferences(declarationZReferences)
+      _                       = setupIsaManagers = declarationManagers
+      applications           <- setupApplications()
+      _                       = setupIsaApplications = applications
+      nonDeclarationManagers <- setupNonDeclarationZReferences(nonDeclarationZReferences)
+      _                       = setupNonDeclarationIsaManagers = nonDeclarationManagers
     } yield ()
 
-    Await.result(setup, referenceOperationTimeout(declarationZReferences.size + sharedZReferences.size))
+    Await.result(setup, setupAndCleanupTimeout)
 
     memoryLoggerScheduler = Executors.newSingleThreadScheduledExecutor()
 
@@ -94,11 +98,11 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
 
     val preparedSubmissionZReferences =
       Option(setupIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef)) ++
-        Option(setupSharedIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef))
+        Option(setupNonDeclarationIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef))
 
     Await.result(
       testDataCleanUp(Option(setupIsaApplications), preparedSubmissionZReferences),
-      referenceOperationTimeout(declarationZReferences.size + sharedZReferences.size)
+      setupAndCleanupTimeout
     )
   }
 
@@ -123,10 +127,10 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
       }
     )
 
-  private def sharedFeeder(rotation: Int): ChainBuilder =
+  private def nonDeclarationFeeder(zReferences: Seq[String], offset: Int): ChainBuilder =
     feed(
-      LoadSizing.circular(sharedZReferences.indices, rotation).map { index =>
-        val im = setupSharedIsaManagers.isaManager(index)
+      zReferences.indices.iterator.map { index =>
+        val im = setupNonDeclarationIsaManagers.isaManager(index + offset)
         Map(
           "isaManagerReference" -> im.zRef,
           "bearerToken"         -> im.bearerToken
@@ -134,9 +138,10 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
       }
     )
 
-  val submissionOnlyFeeder: ChainBuilder = sharedFeeder(rotation = 0)
+  val submissionOnlyFeeder: ChainBuilder = nonDeclarationFeeder(submissionZReferences, offset = 0)
 
-  val reconciliationReportZRefFeeder: ChainBuilder = sharedFeeder(rotation = sharedPoolSize / 2)
+  val reconciliationReportZRefFeeder: ChainBuilder =
+    nonDeclarationFeeder(reconciliationZReferences, offset = submissionZReferences.size)
 
   setup(
     "post-submit-monthly-returns",

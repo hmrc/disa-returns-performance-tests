@@ -18,16 +18,16 @@ package uk.gov.hmrc.perftests.disareturns.util
 
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import uk.gov.hmrc.perftests.disareturns.util.LoadSizing.{ReservedReferences, allocate, circular, declarationUserCount}
+import uk.gov.hmrc.perftests.disareturns.util.LoadSizing.{allocate, reservedReferences, userCount}
 
 import scala.concurrent.duration.DurationInt
 
 class LoadSizingSpec extends AnyWordSpec with Matchers {
 
-  "declarationUserCount" should {
+  "userCount" should {
     "match the runner fallback phase counts at supported loads" in {
       Seq(2d -> 720, 5d -> 1800, 10d -> 3600).foreach { case (loadFactor, expected) =>
-        declarationUserCount(
+        userCount(
           smoke = false,
           journeyLoad = 1,
           loadFactor = loadFactor,
@@ -40,7 +40,7 @@ class LoadSizingSpec extends AnyWordSpec with Matchers {
 
     "match the Jenkins phase counts at supported loads" in {
       Seq(2d -> 1080, 5d -> 2700, 10d -> 5400).foreach { case (loadFactor, expected) =>
-        declarationUserCount(
+        userCount(
           smoke = false,
           journeyLoad = 1,
           loadFactor = loadFactor,
@@ -52,7 +52,7 @@ class LoadSizingSpec extends AnyWordSpec with Matchers {
     }
 
     "allocate one declaration user for smoke" in {
-      declarationUserCount(
+      userCount(
         smoke = true,
         journeyLoad = 1,
         loadFactor = 10,
@@ -65,38 +65,40 @@ class LoadSizingSpec extends AnyWordSpec with Matchers {
 
   "allocate" should {
     "exclude reserved references and keep allocations unique and disjoint" in {
-      val allocated = allocate(declarationCount = 1501, sharedPoolSize = 1000)
-      val all       = allocated.declaration ++ allocated.shared
+      val allocated = allocate(declarationCount = 1501, submissionCount = 1000, reconciliationCount = 500)
+      val all       = allocated.declaration ++ allocated.submission ++ allocated.reconciliation
 
-      all.toSet                                                       should contain noElementsOf ReservedReferences
-      all.distinct                                                    should have size all.size
-      allocated.declaration.toSet.intersect(allocated.shared.toSet) shouldBe empty
+      all.toSet    should contain noElementsOf reservedReferences
+      all.distinct should have size all.size
     }
 
     "reject namespace overflow" in {
-      val error = intercept[IllegalArgumentException](allocate(declarationCount = 9000, sharedPoolSize = 998))
-      error.getMessage should include("exceed the 9997 available Z-references")
+      val error = intercept[IllegalArgumentException](
+        allocate(declarationCount = 99999998, submissionCount = 0, reconciliationCount = 0)
+      )
+      error.getMessage should include("exceed the 99999997 available references")
     }
 
     "support smoke allocations" in {
-      val allocated = allocate(declarationCount = 1, sharedPoolSize = 1)
+      val allocated = allocate(declarationCount = 1, submissionCount = 1, reconciliationCount = 1)
 
-      allocated.declaration shouldBe Vector("Z0000")
-      allocated.shared      shouldBe Vector("Z0001")
+      allocated.declaration    shouldBe Vector("Z0000")
+      allocated.submission     shouldBe Vector("Z0001")
+      allocated.reconciliation shouldBe Vector("Z0002")
     }
 
     "support runs without the declaration journey" in {
-      val allocated = allocate(declarationCount = 0, sharedPoolSize = 2)
+      val allocated = allocate(declarationCount = 0, submissionCount = 2, reconciliationCount = 1)
 
-      allocated.declaration shouldBe empty
-      allocated.shared      shouldBe Vector("Z0000", "Z0001")
+      allocated.declaration    shouldBe empty
+      allocated.submission     shouldBe Vector("Z0000", "Z0001")
+      allocated.reconciliation shouldBe Vector("Z0002")
     }
-  }
 
-  "circular" should {
-    "repeat a pool from an independent rotation" in {
-      circular(Vector("a", "b", "c", "d"), rotation = 2).take(6).toVector shouldBe
-        Vector("c", "d", "a", "b", "c", "d")
+    "allocate references with more than four digits" in {
+      allocate(declarationCount = 10001, submissionCount = 0, reconciliationCount = 0).declaration should contain(
+        "Z10000"
+      )
     }
   }
 }

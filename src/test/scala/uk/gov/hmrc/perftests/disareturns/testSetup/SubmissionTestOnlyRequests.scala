@@ -28,13 +28,14 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class SubmissionTestOnlyRequests(ws: StandaloneAhcWSClient)(implicit ec: ExecutionContext) extends SetupAssertions {
 
-  def deleteOverrides(zReference: String): Future[Unit] =
-    ws.url(s"$disaReturnsSubmissionHost$submissionOverridesPath/$zReference")
-      .delete()
+  def deleteOverrides(zReferences: Seq[String]): Future[Unit] =
+    ws.url(s"$disaReturnsSubmissionHost$submissionOverridesPath/delete")
+      .addHttpHeaders("Content-Type" -> "application/json")
+      .post(Json.obj("zReferences" -> zReferences).toString())
       .map { response =>
         ensureSetup(
-          response.status == 200,
-          s"Failed to delete overrides for [$zReference]. Status=${response.status}, Body=${response.body}"
+          response.status == 204,
+          s"Failed to delete overrides for [${zReferences.size}] Z-references. Status=${response.status}, Body=${response.body}"
         )
       }
 
@@ -49,12 +50,13 @@ class SubmissionTestOnlyRequests(ws: StandaloneAhcWSClient)(implicit ec: Executi
         )
       }
 
-  def setReportingWindowOverride(zReference: String, startDate: String, endDate: String): Future[Unit] =
-    ws.url(s"$disaReturnsSubmissionHost$submissionOverridesPath/$zReference")
+  def setReportingWindowOverride(zReferences: Seq[String], startDate: String, endDate: String): Future[Unit] =
+    ws.url(s"$disaReturnsSubmissionHost$submissionOverridesPath")
       .addHttpHeaders("Content-Type" -> "application/json")
       .put(
         Json
           .obj(
+            "zReferences"     -> zReferences,
             "clock"           -> Json.obj("date" -> submissionClockDate),
             "reportingWindow" -> Json.obj("startDate" -> startDate, "endDate" -> endDate)
           )
@@ -62,8 +64,8 @@ class SubmissionTestOnlyRequests(ws: StandaloneAhcWSClient)(implicit ec: Executi
       )
       .map { response =>
         ensureSetup(
-          response.status == 200,
-          s"Failed to set reporting-window override for [$zReference]. Status=${response.status}, Body=${response.body}"
+          response.status == 204,
+          s"Failed to set reporting-window override for [${zReferences.size}] Z-references. Status=${response.status}, Body=${response.body}"
         )
       }
 
