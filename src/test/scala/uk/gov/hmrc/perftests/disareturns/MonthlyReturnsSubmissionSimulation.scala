@@ -19,6 +19,7 @@ package uk.gov.hmrc.perftests.disareturns
 import com.typesafe.config.ConfigFactory
 import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
+import org.apache.pekko.pattern.{after => afterDelay}
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
 import uk.gov.hmrc.perftests.disareturns.MonthlyReconciliationReportRequests._
 import uk.gov.hmrc.perftests.disareturns.MonthlyReturnsDeclarationRequest._
@@ -30,6 +31,7 @@ import uk.gov.hmrc.perftests.disareturns.util.{DirectMemoryLogger, LoadSizing}
 import java.util.concurrent._
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
+import scala.jdk.DurationConverters._
 
 class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with BaseRequests {
 
@@ -67,7 +69,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   private val declarationRequests = Seq(submitMonthlyReturn, submitDeclaration) ++ callbackRequests
 
   private val setupAndCleanupTimeout = 2.minutes
-  private val cleanupGracePeriod     = ConfigFactory.load().getDuration("perftest.cleanupGracePeriod")
+  private val cleanupGracePeriod     = ConfigFactory.load().getDuration("perftest.cleanupGracePeriod").toScala
 
   before {
     val setup = for {
@@ -98,15 +100,15 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
       memoryLoggerScheduler.shutdownNow()
     }
 
-    Thread.sleep(cleanupGracePeriod.toMillis)
-
     val preparedSubmissionZReferences =
       Option(setupIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef)) ++
         Option(setupNonDeclarationIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef))
 
     Await.result(
-      testDataCleanUp(Option(setupIsaApplications), preparedSubmissionZReferences),
-      setupAndCleanupTimeout
+      afterDelay(cleanupGracePeriod, system.scheduler)(
+        testDataCleanUp(Option(setupIsaApplications), preparedSubmissionZReferences)
+      ),
+      cleanupGracePeriod + setupAndCleanupTimeout
     )
   }
 
