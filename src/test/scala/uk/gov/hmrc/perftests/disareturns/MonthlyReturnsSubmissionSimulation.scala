@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.perftests.disareturns
 
+import com.typesafe.config.ConfigFactory
 import io.gatling.core.Predef._
 import io.gatling.core.structure.ChainBuilder
 import uk.gov.hmrc.performance.simulation.PerformanceTestRunner
@@ -66,6 +67,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
   private val declarationRequests = Seq(submitMonthlyReturn, submitDeclaration) ++ callbackRequests
 
   private val setupAndCleanupTimeout = 2.minutes
+  private val cleanupGracePeriod     = ConfigFactory.load().getDuration("perftest.cleanupGracePeriod")
 
   before {
     val setup = for {
@@ -95,6 +97,8 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     if (memoryLoggerScheduler != null) {
       memoryLoggerScheduler.shutdownNow()
     }
+
+    Thread.sleep(cleanupGracePeriod.toMillis)
 
     val preparedSubmissionZReferences =
       Option(setupIsaManagers).toSeq.flatMap(_.isaManager.map(_.zRef)) ++
