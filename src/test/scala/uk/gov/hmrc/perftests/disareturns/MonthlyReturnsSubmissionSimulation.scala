@@ -147,7 +147,7 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     "post-submit-monthly-returns",
     "POST Submit Monthly Return"
   ).withActions(
-    submissionOnlyFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+    (submissionOnlyFeeder.actionBuilders ++ appFeeder.actionBuilders)*
   ).withRequests(
     submitMonthlyReturn
   )
@@ -156,16 +156,16 @@ class MonthlyReturnsSubmissionSimulation extends PerformanceTestRunner with Base
     "post-declare-monthly-returns",
     "POST Declare Monthly Return"
   ).withActions(
-    declarationFeeder.actionBuilders ++ appFeeder.actionBuilders: _*
+    (declarationFeeder.actionBuilders ++ appFeeder.actionBuilders)*
   ).withRequests(
-    declarationRequests: _*
+    declarationRequests*
   )
 
   setup(
     "get-reconciliation-report",
     "Get Reconciliation Report"
   ).withActions(
-    reconciliationReportZRefFeeder.actionBuilders: _*
+    reconciliationReportZRefFeeder.actionBuilders*
   ).withRequests(
     getFirstReconciliationReportPage,
     getNextReconciliationReportPage

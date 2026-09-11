@@ -25,7 +25,7 @@ import scala.concurrent.duration.DurationInt
 class LoadSizingSpec extends AnyWordSpec with Matchers {
 
   "userCount" should {
-    "match the runner fallback phase counts at supported loads" in {
+    "match the runner fallback phase counts at supported loads" in
       Seq(2d -> 720, 5d -> 1800, 10d -> 3600).foreach { case (loadFactor, expected) =>
         userCount(
           smoke = false,
@@ -36,9 +36,8 @@ class LoadSizingSpec extends AnyWordSpec with Matchers {
           rampDownTime = 1.minute
         ) shouldBe expected
       }
-    }
 
-    "match the Jenkins phase counts at supported loads" in {
+    "match the Jenkins phase counts at supported loads" in
       Seq(2d -> 1080, 5d -> 2700, 10d -> 5400).foreach { case (loadFactor, expected) =>
         userCount(
           smoke = false,
@@ -49,7 +48,6 @@ class LoadSizingSpec extends AnyWordSpec with Matchers {
           rampDownTime = 1.minute
         ) shouldBe expected
       }
-    }
 
     "allocate one declaration user for smoke" in {
       userCount(

@@ -103,7 +103,7 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
 
   def createNotificationBox(clientId: String): Future[Unit] =
     ws.url(s"$ppns_host$ppnsPath")
-      .withHttpHeaders(notificationBoxHadersMap.toSeq: _*)
+      .withHttpHeaders(notificationBoxHadersMap.toSeq*)
       .put(notificationBoxPayload.replace("CLIENT_ID", clientId))
       .map { response =>
         ensureSetup(
@@ -114,7 +114,7 @@ class ThirdPartyApplicationRequests(ws: StandaloneAhcWSClient)(implicit ec: Exec
 
   def createSubscriptionFields(): Future[Unit] =
     ws.url(s"$api_subscription_fields_host$subscriptionPath")
-      .addHttpHeaders(headerWithJsonContentType.toSeq: _*)
+      .addHttpHeaders(headerWithJsonContentType.toSeq*)
       .put(subscriptionFieldsPayload)
       .map { response =>
         ensureSetup(
