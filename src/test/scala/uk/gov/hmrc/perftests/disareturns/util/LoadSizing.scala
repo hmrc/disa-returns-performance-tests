@@ -20,14 +20,18 @@ import scala.concurrent.duration.FiniteDuration
 
 object LoadSizing {
 
-  final case class AllocatedReferences(declaration: Vector[String], shared: Vector[String])
+  final case class AllocatedReferences(
+    declaration: Vector[String],
+    submission: Vector[String],
+    reconciliation: Vector[String]
+  )
 
-  val ReservedReferences: Set[String] = Set("Z1400", "Z1500", "Z1503")
+  val reservedReferences: Set[String] = Set("Z1400", "Z1500", "Z1503")
 
-  private val NoLoad    = 0.0001d
-  private val Namespace = (0 until 10000).map(value => f"Z$value%04d").filterNot(ReservedReferences).toVector
+  private val noLoad        = 0.0001d
+  private val namespaceSize = 100000000 - reservedReferences.size
 
-  def declarationUserCount(
+  def userCount(
     smoke: Boolean,
     journeyLoad: Double,
     loadFactor: Double,
@@ -46,29 +50,36 @@ object LoadSizing {
           1d / (constantRateTime.toSeconds - 1)
         else configuredRate
 
-      val rampUpUsers   = ((NoLoad + (rate - NoLoad) / 2) * rampUpTime.toSeconds).toLong
+      val rampUpUsers   = ((noLoad + (rate - noLoad) / 2) * rampUpTime.toSeconds).toLong
       val constantUsers = (constantRateTime.toSeconds * rate).round
-      val rampDownUsers = ((rate + (NoLoad - rate) / 2) * rampDownTime.toSeconds).toLong
+      val rampDownUsers = ((rate + (noLoad - rate) / 2) * rampDownTime.toSeconds).toLong
       Math.toIntExact(rampUpUsers + constantUsers + rampDownUsers)
     }
 
-  def allocate(declarationCount: Int, sharedPoolSize: Int): AllocatedReferences = {
+  def allocate(declarationCount: Int, submissionCount: Int, reconciliationCount: Int): AllocatedReferences = {
     require(declarationCount >= 0, "declarationCount must not be negative")
-    require(sharedPoolSize >= 1, "perftest.zReferencePoolSize must be at least 1")
+    require(submissionCount >= 0, "submissionCount must not be negative")
+    require(reconciliationCount >= 0, "reconciliationCount must not be negative")
+
+    val total = Seq(declarationCount, submissionCount, reconciliationCount).map(_.toLong).sum
     require(
-      declarationCount + sharedPoolSize <= Namespace.size,
-      s"Declaration count $declarationCount and shared pool size $sharedPoolSize exceed the ${Namespace.size} available Z-references"
+      total <= namespaceSize,
+      s"Required $total Z-references exceed the $namespaceSize available references"
     )
 
-    val declaration = Namespace.take(declarationCount)
-    val shared      = Namespace.slice(declarationCount, declarationCount + sharedPoolSize)
-    AllocatedReferences(declaration, shared)
-  }
+    val references          = Iterator
+      .from(0)
+      .map(value => f"Z$value%04d")
+      .filterNot(reservedReferences)
+      .take(total.toInt)
+      .toVector
+    val submissionStart     = declarationCount
+    val reconciliationStart = submissionStart + submissionCount
 
-  def circular[A](values: IndexedSeq[A], rotation: Int): Iterator[A] = {
-    require(values.nonEmpty, "Circular pool must not be empty")
-    require(rotation >= 0, "rotation must not be negative")
-
-    Iterator.from(rotation).map(index => values(index % values.size))
+    AllocatedReferences(
+      declaration = references.take(declarationCount),
+      submission = references.slice(submissionStart, reconciliationStart),
+      reconciliation = references.drop(reconciliationStart)
+    )
   }
 }

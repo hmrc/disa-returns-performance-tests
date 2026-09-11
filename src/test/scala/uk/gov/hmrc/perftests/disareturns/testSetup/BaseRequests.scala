@@ -42,13 +42,16 @@ trait BaseRequests { self: PerftestConfiguration =>
   val disaReturnsTestOnlyRequests     = new DisaReturnsTestOnlyRequests(wsClient)
   val submissionTestOnlyRequests      = new SubmissionTestOnlyRequests(wsClient)
 
-  val noOfThirdPartyApplications = if (runSingleUserJourney) 1 else 10
+  val noOfThirdPartyApplications: Int = if (runSingleUserJourney) 1 else 10
 
-  private val authSetupParallelism = 10
-  private val authSetupRateLimit   = 5
-  private val createdApplications  = TrieMap.empty[String, Application]
-  private val preparedZReferences  = TrieMap.empty[String, Unit]
-  private val callbackZReferences  = TrieMap.empty[String, Unit]
+  private val authSetupParallelism       = 10
+  private val authSetupRateLimit         = 5
+  private val zReferenceCleanupBatchSize = 5000
+  private val createdApplications        = TrieMap.empty[String, Application]
+  private val preparedZReferences        = TrieMap.empty[String, Unit]
+  private val callbackZReferences        = TrieMap.empty[String, Unit]
+  private lazy val zReferenceBearerToken =
+    authRequests.getSubmissionBearerToken("Z0000", perfTestCredIdPrefix)
 
   private def withBoundedConcurrency[A, B](items: Seq[A])(f: A => Future[B]): Future[Seq[B]] =
     Source(items.toList)
@@ -56,48 +59,40 @@ trait BaseRequests { self: PerftestConfiguration =>
       .mapAsync(authSetupParallelism)(f)
       .runWith(Sink.seq)
 
+  private def inBatches(zReferences: Seq[String])(request: Seq[String] => Future[Unit]): Future[Unit] =
+    zReferences
+      .grouped(zReferenceCleanupBatchSize)
+      .foldLeft(Future.unit)((result, batch) => result.flatMap(_ => request(batch)))
+
   def setupDeclarationZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
     zReferences.foreach(callbackZReferences.put(_, ()))
 
     val deleteMonthlyReturns =
-      if (zReferences.nonEmpty) submissionTestOnlyRequests.deleteMonthlyReturns(zReferences) else Future.unit
+      if (zReferences.nonEmpty) inBatches(zReferences)(submissionTestOnlyRequests.deleteMonthlyReturns) else Future.unit
     val deleteCallbacks      =
-      if (zReferences.nonEmpty) disaReturnsTestOnlyRequests.deleteReconciliationReportReadyCallbacks(zReferences)
+      if (zReferences.nonEmpty)
+        inBatches(zReferences)(disaReturnsTestOnlyRequests.deleteReconciliationReportReadyCallbacks)
       else Future.unit
 
     val setup = for {
       _           <- stubTestOnlyRequests.setReportingWindowsOpen()
       _           <- deleteMonthlyReturns
       _           <- deleteCallbacks
-      isaManagers <- withBoundedConcurrency(zReferences) { zRef =>
-                       for {
-                         _           <- prepareSubmissionZReference(zRef)
-                         bearerToken <- authRequests.getSubmissionBearerToken(zRef)
-                       } yield IsaManager(
-                         zRef = zRef,
-                         bearerToken = bearerToken
-                       )
-                     }
-    } yield IsaManagers(isaManager = isaManagers)
+      _           <- prepareSubmissionZReferences(zReferences)
+      bearerToken <- zReferenceBearerToken
+    } yield IsaManagers(zReferences.map(IsaManager(_, bearerToken)))
 
     setup.recover { case e =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
     }
   }
 
-  def setupSharedZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
+  def setupNonDeclarationZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
     val setup = for {
-      _           <- submissionTestOnlyRequests.deleteMonthlyReturns(zReferences)
-      isaManagers <- withBoundedConcurrency(zReferences) { zRef =>
-                       for {
-                         _           <- prepareSubmissionZReference(zRef)
-                         bearerToken <- authRequests.getSubmissionBearerToken(zRef, s"$perfTestCredIdPrefix-$zRef")
-                       } yield IsaManager(
-                         zRef = zRef,
-                         bearerToken = bearerToken
-                       )
-                     }
-    } yield IsaManagers(isaManagers)
+      _           <- inBatches(zReferences)(submissionTestOnlyRequests.deleteMonthlyReturns)
+      _           <- prepareSubmissionZReferences(zReferences)
+      bearerToken <- zReferenceBearerToken
+    } yield IsaManagers(zReferences.map(IsaManager(_, bearerToken)))
 
     setup.recover { case e =>
       cancel(s"Test has been aborted due to test setup failure: ${e.getMessage}")
@@ -128,17 +123,16 @@ trait BaseRequests { self: PerftestConfiguration =>
     }
   }
 
-  private def prepareSubmissionZReference(zReference: String): Future[Unit] = {
-    val date      = LocalDate.parse(submissionClockDate)
-    val startDate = date.atStartOfDay(ZoneOffset.UTC).toInstant.toString
-    val endDate   = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant.minusNanos(1).toString
+  private def prepareSubmissionZReferences(zReferences: Seq[String]): Future[Unit] =
+    if (zReferences.isEmpty) Future.unit
+    else {
+      val date      = LocalDate.parse(submissionClockDate)
+      val startDate = date.atStartOfDay(ZoneOffset.UTC).toInstant.toString
+      val endDate   = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant.minusNanos(1).toString
 
-    preparedZReferences.put(zReference, ())
-    for {
-      _ <- submissionTestOnlyRequests.deleteOverrides(zReference)
-      _ <- submissionTestOnlyRequests.setReportingWindowOverride(zReference, startDate, endDate)
-    } yield ()
-  }
+      zReferences.foreach(preparedZReferences.put(_, ()))
+      inBatches(zReferences)(submissionTestOnlyRequests.setReportingWindowOverride(_, startDate, endDate))
+    }
 
   def testDataCleanUp(applications: Option[Applications], submissionZReferences: Seq[String]): Future[Unit] = {
 
@@ -158,27 +152,29 @@ trait BaseRequests { self: PerftestConfiguration =>
     val zReferencesToDelete  = submissionZReferences.distinct
     val monthlyReturnCleanup =
       if (zReferencesToDelete.nonEmpty) {
-        submissionTestOnlyRequests.deleteMonthlyReturns(zReferencesToDelete).recover { case NonFatal(e) =>
+        inBatches(zReferencesToDelete)(submissionTestOnlyRequests.deleteMonthlyReturns).recover { case NonFatal(e) =>
           println(s"Warning: failed to clean submission monthly returns: ${e.getMessage}")
           ()
         }
       } else Future.unit
     val callbackCleanup      =
       if (callbackZReferences.nonEmpty) {
-        disaReturnsTestOnlyRequests.deleteReconciliationReportReadyCallbacks(callbackZReferences.keys.toSeq).recover {
-          case NonFatal(e) =>
-            println(s"Warning: failed to clean disa-returns reconciliation report ready callbacks: ${e.getMessage}")
-            ()
+        inBatches(callbackZReferences.keys.toSeq)(
+          disaReturnsTestOnlyRequests.deleteReconciliationReportReadyCallbacks
+        ).recover { case NonFatal(e) =>
+          println(s"Warning: failed to clean disa-returns reconciliation report ready callbacks: ${e.getMessage}")
+          ()
         }
       } else Future.unit
     val overrideCleanup      =
       if (preparedZReferences.nonEmpty) {
-        withBoundedConcurrency(preparedZReferences.keys.toSeq) { zReference =>
-          submissionTestOnlyRequests.deleteOverrides(zReference).recover { case NonFatal(e) =>
-            println(s"Warning: failed to clean submission overrides for $zReference: ${e.getMessage}")
-            ()
-          }
-        }.map(_ => ())
+        val zReferences = preparedZReferences.keys.toSeq
+        inBatches(zReferences)(submissionTestOnlyRequests.deleteOverrides).recover { case NonFatal(e) =>
+          println(
+            s"Warning: failed to clean submission overrides for ${zReferences.size} Z-references: ${e.getMessage}"
+          )
+          ()
+        }
       } else Future.unit
     val submissionCleanup    = Future.sequence(Seq(monthlyReturnCleanup, callbackCleanup, overrideCleanup)).map(_ => ())
 

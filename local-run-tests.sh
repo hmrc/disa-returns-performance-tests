@@ -6,4 +6,4 @@ sbt scalafmtCheckAll scalafmtSbtCheck
 sbt \
   -DrunLocal=true \
   -DmonthlyReturnsTestPayload.numOfIsaAccountSets=1 \
-  gatling:test
+  "Gatling / test"
