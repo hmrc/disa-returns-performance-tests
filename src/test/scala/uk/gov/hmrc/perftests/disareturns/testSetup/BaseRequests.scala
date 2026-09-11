@@ -16,9 +16,9 @@
 
 package uk.gov.hmrc.perftests.disareturns.testSetup
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.stream.scaladsl.{Sink, Source}
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.Materializer
+import org.apache.pekko.stream.scaladsl.{Sink, Source}
 import org.scalatest.Assertions.cancel
 import play.api.libs.ws.ahc.StandaloneAhcWSClient
 import uk.gov.hmrc.performance.conf.PerftestConfiguration

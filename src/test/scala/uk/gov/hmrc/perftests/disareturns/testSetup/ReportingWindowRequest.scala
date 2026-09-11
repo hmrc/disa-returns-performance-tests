@@ -32,7 +32,7 @@ class ReportingWindowRequest(ws: StandaloneAhcWSClient)(implicit ec: ExecutionCo
 
   def setReportingWindowsOpen(): Future[Unit] =
     ws.url(s"$disaReturnsStubHost$reportingWindowPath")
-      .addHttpHeaders(headerWithJsonContentType.toSeq: _*)
+      .addHttpHeaders(headerWithJsonContentType.toSeq*)
       .post(reportingWindowPayload.toString())
       .map { response =>
         ensureSetup(

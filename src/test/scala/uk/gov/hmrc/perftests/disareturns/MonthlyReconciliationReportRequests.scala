@@ -32,7 +32,7 @@ object MonthlyReconciliationReportRequests {
   val getFirstReconciliationReportPage: HttpRequestBuilder =
     http("GET first reconciliation report page")
       .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath")
-      .queryParam("limit", "500")
+      .queryParam("limit", 500)
       .headers(headerOnlyWithBearerToken)
       .check(
         status.is(200),
@@ -43,8 +43,8 @@ object MonthlyReconciliationReportRequests {
   val getNextReconciliationReportPage: HttpRequestBuilder =
     http("GET next reconciliation report page")
       .get(s"$disaReturnsHost$disaReturnsRoute#{isaManagerReference}$reconciliationReportPath")
-      .queryParam("cursor", "#{nextCursor}")
-      .queryParam("limit", "500")
+      .queryParam("cursor", session => session("nextCursor").validate[String])
+      .queryParam("limit", 500)
       .headers(headerOnlyWithBearerToken)
       .check(
         status.is(200),

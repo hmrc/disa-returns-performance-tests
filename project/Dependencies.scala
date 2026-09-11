@@ -3,11 +3,10 @@ import sbt.*
 object Dependencies {
 
   val test = Seq(
-    "uk.gov.hmrc"       %% "performance-test-runner" % "6.3.0"  % Test,
-    "com.typesafe.play" %% "play-json"               % "2.10.6" % Test,
-    "com.typesafe.play" %% "play-ahc-ws-standalone"  % "2.2.0"  % Test,
-    "com.typesafe.play" %% "play-ws-standalone-json" % "2.2.0"  % Test,
-    "com.typesafe.akka" %% "akka-stream"             % "2.6.20" % Test,
-    "org.scalatest"     %% "scalatest"               % "3.2.17" % Test
+    "uk.gov.hmrc"        %% "performance-test-runner" % "6.3.0"  % Test,
+    "com.typesafe.play"  %% "play-json"               % "2.10.8" % Test,
+    ("org.playframework" %% "play-ahc-ws-standalone"  % "3.0.13" % Test).cross(CrossVersion.for3Use2_13),
+    ("org.apache.pekko"  %% "pekko-stream"            % "1.7.0"  % Test).cross(CrossVersion.for3Use2_13),
+    "org.scalatest"      %% "scalatest"               % "3.2.20" % Test
   )
 }
