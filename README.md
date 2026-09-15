@@ -80,8 +80,7 @@ Tax year and month are derived from the aggregate override rather than URL segme
 
 - `./smoke-run-tests.sh` runs every journey locally with one user per journey.
 - `./local-run-tests.sh` runs the full local performance test using the configured journey loads and a compact valid
-  four-line NDJSON body. This keeps request-rate validation meaningful without sending about 28 GB through a single
-  local service stack. Jenkins and direct `sbt` runs retain the configured 16,000-line body.
+  four-line NDJSON body. Jenkins and direct `sbt` runs use the representative configured 1,700-line body.
 
 Both scripts stop immediately if Gatling fails.
 
@@ -121,6 +120,10 @@ sbt -DrunLocal=false \
   -Dperftest.rampdownTime=1 \
   "Gatling / test"
 ```
+
+At 100% load, a standard Jenkins run uploads about 600 monthly-return files with 1,700 records in each file. That's
+roughly 1 million records over the run and is close to the estimated peak-month volume of 567 API submissions. Loads
+above 100% are for capacity testing rather than expected traffic.
 
 Run smoke test (staging) as follows:
 
