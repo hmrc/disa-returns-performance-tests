@@ -67,16 +67,16 @@ trait BaseRequests { self: PerftestConfiguration =>
   def setupDeclarationZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
     zReferences.foreach(callbackZReferences.put(_, ()))
 
-    val deleteMonthlyReturns =
-      if (zReferences.nonEmpty) inBatches(zReferences)(submissionTestOnlyRequests.deleteMonthlyReturns) else Future.unit
-    val deleteCallbacks      =
+    val cleanupMonthlyReturns =
+      inBatches(zReferences)(submissionTestOnlyRequests.cleanupMonthlyReturns)
+    val deleteCallbacks       =
       if (zReferences.nonEmpty)
         inBatches(zReferences)(disaReturnsTestOnlyRequests.deleteReconciliationReportReadyCallbacks)
       else Future.unit
 
     val setup = for {
       _           <- stubTestOnlyRequests.setReportingWindowsOpen()
-      _           <- deleteMonthlyReturns
+      _           <- cleanupMonthlyReturns
       _           <- deleteCallbacks
       _           <- prepareSubmissionZReferences(zReferences)
       bearerToken <- zReferenceBearerToken
@@ -89,7 +89,7 @@ trait BaseRequests { self: PerftestConfiguration =>
 
   def setupNonDeclarationZReferences(zReferences: Seq[String]): Future[IsaManagers] = {
     val setup = for {
-      _           <- inBatches(zReferences)(submissionTestOnlyRequests.deleteMonthlyReturns)
+      _           <- inBatches(zReferences)(submissionTestOnlyRequests.cleanupMonthlyReturns)
       _           <- prepareSubmissionZReferences(zReferences)
       bearerToken <- zReferenceBearerToken
     } yield IsaManagers(zReferences.map(IsaManager(_, bearerToken)))
@@ -152,7 +152,7 @@ trait BaseRequests { self: PerftestConfiguration =>
     val zReferencesToDelete  = submissionZReferences.distinct
     val monthlyReturnCleanup =
       if (zReferencesToDelete.nonEmpty) {
-        inBatches(zReferencesToDelete)(submissionTestOnlyRequests.deleteMonthlyReturns).recover { case NonFatal(e) =>
+        inBatches(zReferencesToDelete)(submissionTestOnlyRequests.cleanupMonthlyReturns).recover { case NonFatal(e) =>
           println(s"Warning: failed to clean submission monthly returns: ${e.getMessage}")
           ()
         }

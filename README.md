@@ -41,10 +41,10 @@ Do **NOT** run a full performance test against staging from your local machine. 
 
 ### Test Data Lifecycle
 
-The suite prepares aggregate clock/reporting-window overrides and scoped monthly-return data before execution, then
-deletes those records and overrides afterwards. Each aggregate uses the fixed clock date `2026-08-17` and that day's
-reporting window. References are allocated dynamically using the staging-only 4-to-8 digit format. Reserved stub error
-references `Z1400`, `Z1500`, and `Z1503` are excluded.
+The suite prepares aggregate clock/reporting-window overrides and clears scoped monthly returns and work items before
+execution, then cleans up the same references and overrides afterwards. Each aggregate uses the fixed clock date
+`2026-08-17` and that day's reporting window. References are allocated dynamically using the staging-only 4-to-8 digit
+format. Reserved stub error references `Z1400`, `Z1500`, and `Z1503` are excluded.
 
 Each injected user gets a unique reference across the declaration, submission-only, and reconciliation journeys. Counts
 are calculated from each journey's load and duration. Smoke runs allocate one reference per journey.
@@ -54,7 +54,8 @@ service data.
 
 Submission setup and cleanup use:
 
-- `POST /disa-returns-submission/test-only/monthly-returns` with `{"zReferences":[...]}` to delete scoped monthly returns
+- `POST /disa-returns-submission/test-only/monthly-returns/cleanup` with `{"zReferences":[...]}` to delete scoped monthly
+  returns and work items
 - `POST /disa-returns-submission/test-only/overrides/delete` to delete overrides
 - `PUT /disa-returns-submission/test-only/overrides` to set clock and reporting window overrides
 - `POST /test-only/monthly` on `DISA_RETURNS` with `{"zReferences":[...]}` to delete scoped reconciliation-report-ready callback data
