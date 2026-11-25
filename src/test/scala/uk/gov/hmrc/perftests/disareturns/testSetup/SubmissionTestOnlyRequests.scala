@@ -39,14 +39,14 @@ class SubmissionTestOnlyRequests(ws: StandaloneAhcWSClient)(implicit ec: Executi
         )
       }
 
-  def deleteMonthlyReturns(zReferences: Seq[String]): Future[Unit] =
-    ws.url(s"$disaReturnsSubmissionHost$submissionMonthlyReturnsPath")
+  def cleanupMonthlyReturns(zReferences: Seq[String]): Future[Unit] =
+    ws.url(s"$disaReturnsSubmissionHost$submissionMonthlyReturnsCleanupPath")
       .addHttpHeaders("Content-Type" -> "application/json")
       .post(Json.obj("zReferences" -> zReferences).toString())
       .map { response =>
         ensureSetup(
           response.status == 204,
-          s"Failed to delete monthly returns for [${zReferences.size}] Z-references. Status=${response.status}, Body=${response.body}"
+          s"Failed to clean monthly returns and work items for [${zReferences.size}] Z-references. Status=${response.status}, Body=${response.body}"
         )
       }
 
